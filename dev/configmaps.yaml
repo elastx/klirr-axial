@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: node-config-0
+data:
+  config-0.yaml: |
+    data:
+      - id: "1"
+        user: "Alice"
+        content: "Welcome to the BBS! Feel free to post your messages here."
+      - id: "2"
+        user: "Bob"
+        content: "Don't forget to check out the latest news and updates in the announcements section."
+      - id: "3"
+        user: "Charlie"
+        content: "Looking for help? Post your questions in the help forum."
+      - id: "4"
+        user: "Diana"
+        content: "Share your favorite recipes in the cooking forum!"
+      - id: "5"
+        user: "Eve"
+        content: "Join the discussion on the latest tech trends in the technology forum."
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: node-config-1
+data:
+  config-1.yaml: |
+    data:
+      - id: "1"
+        user: "Alice"
+        content: "Welcome to the BBS! Feel free to post your messages here."
+      - id: "2"
+        user: "Bob"
+        content: "Don't forget to check out the latest news and updates in the announcements section."
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: node-config-2
+data:
+  config-2.yaml: |
+    data:
+      - id: "3"
+        user: "Charlie"
+        content: "Looking for help? Post your questions in the help forum."
+      - id: "4"
+        user: "Diana"
+        content: "Share your favorite recipes in the cooking forum!"

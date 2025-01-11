@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-instance-0
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-instance-0
+  template:
+    metadata:
+      labels:
+        app: node-instance-0
+    spec:
+      containers:
+      - name: node
+        image: node:latest
+        env:
+        - name: NODE_ID
+          value: "node-0"
+        - name: DATA_FILE
+          value: "/data/config-0.yaml"
+        volumeMounts:
+        - name: data-volume
+          mountPath: /data
+      volumes:
+      - name: data-volume
+        configMap:
+          name: node-config-0
