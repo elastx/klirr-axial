@@ -4,6 +4,6 @@ WORKDIR /app
 
 COPY . .
 
-RUN go build -o node-app .
+RUN go build -o axial .
 
-CMD ["./node-app"]
+CMD ["./axial"]
