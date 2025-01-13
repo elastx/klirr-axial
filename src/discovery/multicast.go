@@ -164,22 +164,27 @@ func StartMulticastListener(cfg config.Config, conn *MulticastConnection) {
 	buffer := make([]byte, 4096)
 
 	for {
-			n, src, err := conn.Conn.ReadFromUDP(buffer)
-			if err != nil {
-					fmt.Println("Error receiving message:", err)
-					continue
-			}
-			
-			message := string(buffer[:n])
-			
-			// Only process messages that look like ours (4 pipe-separated fields)
-			if parts := strings.Split(message, "|"); len(parts) == 4 {
-					fmt.Printf("IF: %s\tRECV: %s (from %s)\n", conn.iface.Name, message, src)
-			} else {
-					// Debug log for non-matching messages
-					// fmt.Printf("Ignored non-axial message from %s (len=%d)\n", 
-					// 		src, len(message))
-			}
+		n, src, err := conn.Conn.ReadFromUDP(buffer)
+		if err != nil {
+			fmt.Println("Error receiving message:", err)
+			continue
+		}
+
+		// If src doesn't contain cfg.MulticastPort, ignore the message
+		if !strings.Contains(src.String(), fmt.Sprintf(":%d", cfg.MulticastPort)) {
+			continue
+		}
+
+		message := string(buffer[:n])
+
+		// Only process messages that look like ours (4 pipe-separated fields)
+		if parts := strings.Split(message, "|"); len(parts) == 4 {
+			fmt.Printf("IF: %s\tRECV: %s (from %s)\n", conn.iface.Name, message, src)
+		} else {
+			// Debug log for non-matching messages
+			fmt.Printf("Ignored non-axial message from %s (len=%d)\n",
+				src, len(message))
+		}
 	}
 }
 
