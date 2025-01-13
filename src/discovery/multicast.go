@@ -174,7 +174,7 @@ func StartMulticastListener(cfg config.Config, conn *net.UDPConn) {
 	}
 }
 
-func StartBroadcast(cfg config.Config, hash string, addr string, conn *net.UDPConn) {
+func StartBroadcast(cfg config.Config, hash string, addr string, conn *MulticastConnection) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -190,12 +190,12 @@ func StartBroadcast(cfg config.Config, hash string, addr string, conn *net.UDPCo
 	fmt.Printf("Starting broadcast from %s to %s\n", localIP, targetAddr)
 
 	for range ticker.C {
-		message := fmt.Sprintf("%s|%s|%s|%s\n", cfg.NodeID, hash, addr, localIP)
-		_, err := conn.WriteToUDP([]byte(message), targetAddr)
+		message := fmt.Sprintf("%s|%s|%s|%s", cfg.NodeID, hash, addr, localIP)
+		_, err := conn.Conn.WriteToUDP([]byte(fmt.Sprintf("%s\n", message)), targetAddr)
 		if err != nil {
 			fmt.Printf("Error sending multicast message: %v\n", err)
 		} else {
-			fmt.Printf("Broadcasted: node=%s hash=%s addr=%s ip=%s\n", cfg.NodeID, hash, addr, localIP)
+			fmt.Printf("Broadcasted: %s. Interface: %s\n", message, conn.iface.Name)
 		}
 	}
 }

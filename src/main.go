@@ -50,7 +50,7 @@ func main() {
     for _, conn := range connections {
         defer conn.Conn.Close()
         go discovery.StartMulticastListener(cfg, conn.Conn)
-        go discovery.StartBroadcast(cfg, hash, fmt.Sprintf(":%d", cfg.APIPort), conn.Conn)
+        go discovery.StartBroadcast(cfg, hash, fmt.Sprintf(":%d", cfg.APIPort), &conn)
     }
 	go api.StartHTTPServer()
 
