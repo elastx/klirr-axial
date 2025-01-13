@@ -86,98 +86,145 @@ func CreateMulticastSockets(cfg config.Config) ([]MulticastConnection, error) {
 	return connections, nil
 }
 
+func isBroadcast(ip net.IP) bool {
+	// Check for 255.255.255.255 or x.x.x.255
+	if ip == nil {
+			return false
+	}
+	if ip.To4() == nil {
+			return false
+	}
+	return ip[len(ip)-1] == 255
+}
+
+
 func setupMulticastConn(cfg config.Config, iface *net.Interface, addr *net.UDPAddr) (*net.UDPConn, error) {
-	conn, err := net.ListenMulticastUDP("udp4", iface, addr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create socket: %v. Addr: %v", err, addr)
-	}
 
-	p := ipv4.NewPacketConn(conn)
+	var conn *net.UDPConn
+	var err error
 
-	if iface != nil {
-		// Set the interface for outgoing multicast traffic
-		if err := p.SetMulticastInterface(iface); err != nil {
-			conn.Close()
-			return nil, fmt.Errorf("SetMulticastInterface failed: %v", err)
+	// Check if we're using broadcast
+	if isBroadcast(addr.IP) {
+		// For broadcast
+		laddr := &net.UDPAddr{
+			IP:   net.IPv4zero,
+			Port: addr.Port,
 		}
-	}
-
-	// Enable multicast loopback
-	if err := p.SetMulticastLoopback(true); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("SetMulticastLoopback failed: %v", err)
-	}
-
-	// Set socket options using raw fd
-	rawConn, err := conn.SyscallConn()
-	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to get raw connection: %v", err)
-	}
-
-	err = rawConn.Control(func(fd uintptr) {
-		// Allow multiple sockets to use the same port
-		err := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+		conn, err = net.ListenUDP("udp4", laddr)
 		if err != nil {
-			panic(fmt.Errorf("failed to set SO_REUSEADDR: %v", err))
+			return nil, fmt.Errorf("failed to create broadcast socket: %v", err)
 		}
 
-		// Allow sending to loopback interface
-		err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_MULTICAST_LOOP, 1)
-		if err != nil {
-			panic(fmt.Errorf("failed to set IP_MULTICAST_LOOP: %v", err))
-		}
-
-		// Set multicast TTL
-		err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_MULTICAST_TTL, 2)
-		if err != nil {
-			panic(fmt.Errorf("failed to set multicast TTL: %v", err))
-		}
-	})
-	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to set socket options: %v", err)
-	}
-
-	// Check if MulticastAddress is an IP address or hostname
-	multicastIP := net.ParseIP(cfg.MulticastAddress)
-	if multicastIP == nil {
-		// Resolve hostname to IP address
-		multicastIPs, err := net.LookupIP(cfg.MulticastAddress)
+		// Set broadcast permission
+		rawConn, err := conn.SyscallConn()
 		if err != nil {
 			conn.Close()
-			return nil, fmt.Errorf("failed to resolve multicast address: %v", err)
+			return nil, fmt.Errorf("failed to get raw connection: %v", err)
 		}
-		multicastIP = multicastIPs[0]
-	}
 
-	// Force leave and rejoin of the multicast group
-	if err := p.LeaveGroup(iface, &net.UDPAddr{IP: multicastIP}); err != nil {
-		fmt.Printf("Warning: failed to leave multicast group: %v\n", err)
-	}
-
-	if err := p.JoinGroup(iface, &net.UDPAddr{IP: multicastIP}); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to join multicast group: %v", err)
-	}
-
-	if iface == nil {
-		fmt.Printf("Successfully joined multicast group %s on all interfaces\n", multicastIP)
+		err = rawConn.Control(func(fd uintptr) {
+			err := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_BROADCAST, 1)
+			if err != nil {
+				panic(fmt.Errorf("failed to set SO_BROADCAST: %v", err))
+			}
+		})
+		if err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("failed to set socket options: %v", err)
+		}
 	} else {
-		fmt.Printf("Successfully joined multicast group %s on interface %s\n", multicastIP, iface.Name)
-	}
 
-	// Set buffer sizes
-	if err := conn.SetReadBuffer(1048576); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to set read buffer: %v", err)
-	}
+		conn, err := net.ListenMulticastUDP("udp4", iface, addr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create socket: %v. Addr: %v", err, addr)
+		}
 
-	if err := conn.SetWriteBuffer(1048576); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to set write buffer: %v", err)
-	}
+		p := ipv4.NewPacketConn(conn)
 
+		if iface != nil {
+			// Set the interface for outgoing multicast traffic
+			if err := p.SetMulticastInterface(iface); err != nil {
+				conn.Close()
+				return nil, fmt.Errorf("SetMulticastInterface failed: %v", err)
+			}
+		}
+
+		// Enable multicast loopback
+		if err := p.SetMulticastLoopback(true); err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("SetMulticastLoopback failed: %v", err)
+		}
+
+		// Set socket options using raw fd
+		rawConn, err := conn.SyscallConn()
+		if err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("failed to get raw connection: %v", err)
+		}
+
+		err = rawConn.Control(func(fd uintptr) {
+			// Allow multiple sockets to use the same port
+			err := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+			if err != nil {
+				panic(fmt.Errorf("failed to set SO_REUSEADDR: %v", err))
+			}
+
+			// Allow sending to loopback interface
+			err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_MULTICAST_LOOP, 1)
+			if err != nil {
+				panic(fmt.Errorf("failed to set IP_MULTICAST_LOOP: %v", err))
+			}
+
+			// Set multicast TTL
+			err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_MULTICAST_TTL, 2)
+			if err != nil {
+				panic(fmt.Errorf("failed to set multicast TTL: %v", err))
+			}
+		})
+		if err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("failed to set socket options: %v", err)
+		}
+
+		// Check if MulticastAddress is an IP address or hostname
+		multicastIP := net.ParseIP(cfg.MulticastAddress)
+		if multicastIP == nil {
+			// Resolve hostname to IP address
+			multicastIPs, err := net.LookupIP(cfg.MulticastAddress)
+			if err != nil {
+				conn.Close()
+				return nil, fmt.Errorf("failed to resolve multicast address: %v", err)
+			}
+			multicastIP = multicastIPs[0]
+		}
+
+		// Force leave and rejoin of the multicast group
+		if err := p.LeaveGroup(iface, &net.UDPAddr{IP: multicastIP}); err != nil {
+			fmt.Printf("Warning: failed to leave multicast group: %v\n", err)
+		}
+
+		if err := p.JoinGroup(iface, &net.UDPAddr{IP: multicastIP}); err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("failed to join multicast group: %v", err)
+		}
+
+		if iface == nil {
+			fmt.Printf("Successfully joined multicast group %s on all interfaces\n", multicastIP)
+		} else {
+			fmt.Printf("Successfully joined multicast group %s on interface %s\n", multicastIP, iface.Name)
+		}
+
+		// Set buffer sizes
+		if err := conn.SetReadBuffer(1048576); err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("failed to set read buffer: %v", err)
+		}
+
+		if err := conn.SetWriteBuffer(1048576); err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("failed to set write buffer: %v", err)
+		}
+	}
 	return conn, nil
 }
 
@@ -221,16 +268,16 @@ func StartBroadcast(cfg config.Config, hash string, conn *MulticastConnection) {
 	localIP := getLocalIP()
 	message := fmt.Sprintf("%s|%s|%s|%s", cfg.NodeID, hash, addr, localIP)
 
-	targetAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%d", cfg.MulticastAddress, cfg.MulticastPort))
-	if err != nil {
-		fmt.Printf("Error resolving multicast address: %v\n", err)
-		return
+	// Explicitly specify port 45678 for destination
+	targetAddr := net.UDPAddr{
+		IP:   net.ParseIP(cfg.MulticastAddress),
+		Port: 45678, // Force this specific port
 	}
 
-	fmt.Printf("Starting broadcast to %s\n", targetAddr)
+	fmt.Printf("Starting broadcast to %s:%d\n", targetAddr.IP, targetAddr.Port)
 
 	for range ticker.C {
-		_, err := conn.Conn.WriteToUDP([]byte(message), targetAddr)
+		_, err := conn.Conn.WriteToUDP([]byte(message), &targetAddr)
 		if err != nil {
 			fmt.Printf("Error sending multicast message: %v\n", err)
 		} else {

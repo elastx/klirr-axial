@@ -21,7 +21,7 @@ func LoadConfig() (Config, error) {
 			}
 			cfg = Config{
 				NodeID:           fmt.Sprintf("axial-%s", hostname),
-				MulticastAddress: "239.192.0.1",
+				MulticastAddress: "192.168.1.255",
 				MulticastPort:    45678,
 				APIPort:          8080,
 				LogLevel:         "info",
