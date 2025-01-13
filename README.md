@@ -162,3 +162,10 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 
 ## Acknowledgments
 - Inspired by decentralized protocols like CRDT, Meshtastic, and modern distributed systems.
+
+
+# Notes
+
+## Considerations
+
+Perhaps we shouldn't use broadcast (255.255.255.255). Raspberry Pi should work fine with multicast.
