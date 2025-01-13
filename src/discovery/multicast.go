@@ -12,14 +12,24 @@ import (
 )
 
 func CreateMulticastSocket(cfg config.Config) (*net.UDPConn, error) {
-	addr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf(":%d", cfg.MulticastPort))
+	addr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%d", cfg.MulticastAddress, cfg.MulticastPort))
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve address: %v", err)
 	}
 
-	conn, err := net.ListenUDP("udp4", addr)
+	iface, err := findMulticastInterface()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create socket: %v", err)
+		return nil, fmt.Errorf("failed to find multicast-enabled interface: %v", err)
+	}
+	if iface == nil {
+		return nil, fmt.Errorf("no multicast-enabled interface found")
+	}
+
+	fmt.Printf("Using interface %s\n", iface.Name)
+
+	conn, err := net.ListenMulticastUDP("udp4", iface, addr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create socket: %v. Addr: %v", err, addr)
 	}
 
 	// Set socket options using raw fd
@@ -43,26 +53,32 @@ func CreateMulticastSocket(cfg config.Config) (*net.UDPConn, error) {
 
 		// Join multicast group
 		p := ipv4.NewPacketConn(conn)
-		ifaces, err := net.Interfaces()
-		if err != nil {
-			panic(fmt.Errorf("failed to get network interfaces: %v", err))
-		}
 
-		var iface *net.Interface
-		for _, i := range ifaces {
-			if i.Flags&net.FlagMulticast != 0 {
-				iface = &i
-				break
-			}
+		iface, err := findMulticastInterface()
+		if err != nil {
+			panic(fmt.Errorf("failed to find multicast-enabled interface: %v", err))
 		}
 
 		if iface == nil {
 			panic(fmt.Errorf("no multicast-enabled interface found"))
 		}
 
+		fmt.Printf("Joining multicast group %s on interface %s\n", multicastIP, iface.Name)
+
+		err = p.SetMulticastInterface(iface)
+		if err != nil {
+				panic(fmt.Errorf("failed to set multicast interface: %v", err))
+		}
+
+		// Leave the multicast group if already joined
+		err = p.LeaveGroup(iface, &net.UDPAddr{IP: multicastIP})
+		if err != nil {
+			fmt.Printf("Failed to leave multicast group: %v\n", err)
+		}
+
 		err = p.JoinGroup(iface, &net.UDPAddr{IP: multicastIP})
 		if err != nil {
-			panic(fmt.Errorf("failed to join multicast group: %v", err))
+			panic(fmt.Errorf("failed to join multicast group: %v. Args: %+v %+v", err, iface, &net.UDPAddr{IP: multicastIP}))
 		}
 
 		// Set multicast TTL
@@ -111,7 +127,7 @@ func StartBroadcast(cfg config.Config, hash string, addr string, conn *net.UDPCo
 	localIP := getLocalIP()
 
 	// Resolve multicast address to an IP address
-	targetAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:9999", cfg.MulticastAddress))
+	targetAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%d", cfg.MulticastAddress, cfg.MulticastPort))
 	if err != nil {
 		fmt.Printf("Error resolving multicast address: %v\n", err)
 		return
