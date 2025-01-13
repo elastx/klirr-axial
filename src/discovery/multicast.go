@@ -3,6 +3,7 @@ package discovery
 import (
 	"fmt"
 	"net"
+	"strings"
 	"syscall"
 	"time"
 
@@ -158,29 +159,37 @@ func setupMulticastConn(cfg config.Config, iface *net.Interface, addr *net.UDPAd
 	return conn, nil
 }
 
-func StartMulticastListener(cfg config.Config, conn *net.UDPConn) {
-	fmt.Printf("Listening for messages on %v\n", conn.LocalAddr())
+func StartMulticastListener(cfg config.Config, conn *MulticastConnection) {
+	fmt.Printf("Listening for messages on %v\n", conn.Conn.LocalAddr())
 	buffer := make([]byte, 4096)
 
 	for {
-			n, src, err := conn.ReadFromUDP(buffer)
+			n, src, err := conn.Conn.ReadFromUDP(buffer)
 			if err != nil {
 					fmt.Println("Error receiving message:", err)
 					continue
 			}
 			
-			fmt.Printf("Received %d bytes from %s\n", n, src)
-			fmt.Printf("Raw bytes: %v\n", buffer[:n])
-			fmt.Printf("As string: %q\n", buffer[:n])
+			message := string(buffer[:n])
+			
+			// Only process messages that look like ours (4 pipe-separated fields)
+			if parts := strings.Split(message, "|"); len(parts) == 4 {
+					fmt.Printf("IF: %s\tRECV: %s (from %s)\n", conn.iface.Name, message, src)
+			} else {
+					// Debug log for non-matching messages
+					// fmt.Printf("Ignored non-axial message from %s (len=%d)\n", 
+					// 		src, len(message))
+			}
 	}
 }
 
-func StartBroadcast(cfg config.Config, hash string, addr string, conn *MulticastConnection) {
+func StartBroadcast(cfg config.Config, hash string, conn *MulticastConnection) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
-	// Start with a simple test message
-	testMessage := []byte("test\n")
+	addr := fmt.Sprintf(":%d", cfg.APIPort)
+	localIP := getLocalIP()
+	message := fmt.Sprintf("%s|%s|%s|%s", cfg.NodeID, hash, addr, localIP)
 
 	targetAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%d", cfg.MulticastAddress, cfg.MulticastPort))
 	if err != nil {
@@ -191,13 +200,11 @@ func StartBroadcast(cfg config.Config, hash string, addr string, conn *Multicast
 	fmt.Printf("Starting broadcast to %s\n", targetAddr)
 
 	for range ticker.C {
-		_, err := conn.Conn.WriteToUDP(testMessage, targetAddr)
+		_, err := conn.Conn.WriteToUDP([]byte(message), targetAddr)
 		if err != nil {
 			fmt.Printf("Error sending multicast message: %v\n", err)
 		} else {
-			fmt.Printf("Broadcasted test message\n")
-			// Print the raw bytes we're sending
-			fmt.Printf("Raw bytes sent: %v\n", testMessage)
+			fmt.Printf("IF: %s\tSENT: %s\n", conn.iface.Name, message)
 		}
 	}
 }
