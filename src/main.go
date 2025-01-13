@@ -42,15 +42,16 @@ func main() {
 	fmt.Printf("Node %s hash: %s\n", nodeID, hash)
 
 	// Create single multicast socket
-	conn, err := discovery.CreateMulticastSocket(cfg)
-	if err != nil {
-		panic(err)
-	}
-	defer conn.Close()
-
-	// Start services
-	go discovery.StartMulticastListener(cfg, conn)
-	go discovery.StartBroadcast(cfg, hash, fmt.Sprintf(":%d", cfg.APIPort), conn)
+    connections, err := discovery.CreateMulticastSockets(cfg)
+    if err != nil {
+        panic(err)
+    }
+    
+    for _, conn := range connections {
+        defer conn.Conn.Close()
+        go discovery.StartMulticastListener(cfg, conn.Conn)
+        go discovery.StartBroadcast(cfg, hash, fmt.Sprintf(":%d", cfg.APIPort), conn.Conn)
+    }
 	go api.StartHTTPServer()
 
 	select {}
