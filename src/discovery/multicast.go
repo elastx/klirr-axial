@@ -205,7 +205,7 @@ func StartMulticastListener(cfg config.Config, conn *MulticastConnection) {
 
 		// Only process messages that look like ours (4 pipe-separated fields)
 		if parts := strings.Split(message, "|"); len(parts) == 4 {
-			fmt.Printf("IF: %s\tRECV: %s (from %s)\n", conn.iface.Name, message, src)
+			fmt.Printf("RECV: %s (from %s)\n", message, src)
 		} else {
 			// Debug log for non-matching messages
 			fmt.Printf("Ignored non-axial message from %s (len=%d)\n", src, len(message))
@@ -234,7 +234,7 @@ func StartBroadcast(cfg config.Config, hash string, conn *MulticastConnection) {
 		if err != nil {
 			fmt.Printf("Error sending multicast message: %v\n", err)
 		} else {
-			fmt.Printf("IF: %s\tSENT: %s\n", conn.iface.Name, message)
+			fmt.Printf("SENT: %s\n", message)
 		}
 	}
 }
