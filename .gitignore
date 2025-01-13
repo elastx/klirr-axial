@@ -1,1 +1,5 @@
+# Local settings
 .vscode
+
+# Generated dependencies (check Makefile)
+dev/multus-daemonset.yaml

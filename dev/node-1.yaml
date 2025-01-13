@@ -20,6 +20,8 @@ spec:
           value: "node-1"
         - name: DATA_FILE
           value: "/data/config-1.yaml"
+        - name: MULTICAST_ADDRESS
+          value: "multicast-relay.default.svc.cluster.local"  # because real multicast doesn't work in k8s
         volumeMounts:
         - name: data-volume
           mountPath: /data
