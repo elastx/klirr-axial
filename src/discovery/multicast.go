@@ -94,10 +94,12 @@ func setupMulticastConn(cfg config.Config, iface *net.Interface, addr *net.UDPAd
 
 	p := ipv4.NewPacketConn(conn)
 
-	// Set the interface for outgoing multicast traffic
-	if err := p.SetMulticastInterface(iface); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("SetMulticastInterface failed: %v", err)
+	if iface != nil {
+		// Set the interface for outgoing multicast traffic
+		if err := p.SetMulticastInterface(iface); err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("SetMulticastInterface failed: %v", err)
+		}
 	}
 
 	// Enable multicast loopback
@@ -159,7 +161,11 @@ func setupMulticastConn(cfg config.Config, iface *net.Interface, addr *net.UDPAd
 		return nil, fmt.Errorf("failed to join multicast group: %v", err)
 	}
 
-	fmt.Printf("Successfully joined multicast group %s on interface %s\n", multicastIP, iface.Name)
+	if iface == nil {
+		fmt.Printf("Successfully joined multicast group %s on all interfaces\n", multicastIP)
+	} else {
+		fmt.Printf("Successfully joined multicast group %s on interface %s\n", multicastIP, iface.Name)
+	}
 
 	// Set buffer sizes
 	if err := conn.SetReadBuffer(1048576); err != nil {
