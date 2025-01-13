@@ -1,48 +1,37 @@
 package config
 
 import (
-	"log"
+	"os"
 
-	"github.com/joho/godotenv"
-	"github.com/spf13/viper"
+	"gopkg.in/yaml.v2"
 )
 
-func init() {
-	viper.SetConfigName("config")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath(".")
-	viper.AddConfigPath("/etc/axial/")
-	viper.AddConfigPath("$HOME/.axial")
+func LoadConfig() (Config, error) {
+	cfg := Config{}
 
-	envConfigPath := viper.GetString("CONFIG_PATH")
-	if envConfigPath != "" {
-		viper.AddConfigPath(envConfigPath)
-	}
-
-	err := godotenv.Load()
+	// Load from ./config.yaml
+	file, err := os.Open("config.yaml")
 	if err != nil {
-		log.Println("Error loading .env file")
+		if os.IsNotExist(err) {
+			cfg = Config{
+				NodeID:           "default",
+				MulticastAddress: "239.192.0.1",
+				MulticastPort:    9999,
+				APIPort:          8080,
+				LogLevel:         "info",
+				DataFile:         "data.yaml",
+			}
+			return cfg, nil
+		}
+		return cfg, err
 	}
+	defer file.Close()
 
-	viper.AutomaticEnv()
-
-	viper.SetDefault("NodeID", "axial")
-	viper.SetDefault("Port", 8080)
-	viper.SetDefault("LogLevel", "info")
-	viper.SetDefault("MulticastAddress", "239.192.0.1")
-	viper.SetDefault("MulticastPort", 9999)
-
-	if err := viper.ReadInConfig(); err != nil {
-		log.Println("Error reading config file, using defaults and env variables")
+	decoder := yaml.NewDecoder(file)
+	err = decoder.Decode(&cfg)
+	if err != nil {
+		return cfg, err
 	}
-}
-
-func LoadConfig() Config {
-	return Config{
-		NodeID:  viper.GetString("NodeID"),
-		APIPort:     viper.GetInt("Port"),
-		LogLevel: viper.GetString("LogLevel"),
-		MulticastAddress: viper.GetString("MulticastAddress"),
-		MulticastPort: viper.GetInt("MulticastPort"),
-	}
+	
+	return cfg, nil
 }

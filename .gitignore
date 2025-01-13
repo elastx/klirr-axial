@@ -3,3 +3,6 @@
 
 # Generated dependencies (check Makefile)
 dev/multus-daemonset.yaml
+
+# Runtime files
+src/data.yaml

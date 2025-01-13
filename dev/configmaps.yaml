@@ -3,7 +3,14 @@ kind: ConfigMap
 metadata:
   name: node-config-0
 data:
-  config-0.yaml: |
+  config.yaml: |
+    node_id: "node-0"
+    multicast_address: "multicast-relay.default.svc.cluster.local"
+    multicast_port: 9999
+    api_port: 8080
+    log_level: "info"
+    data_file: "/data/data.yaml"
+  data.yaml: |
     data:
       - id: "1"
         user: "Alice"
@@ -27,7 +34,14 @@ kind: ConfigMap
 metadata:
   name: node-config-1
 data:
-  config-1.yaml: |
+  config.yaml: |
+    node_id: "node-1"
+    multicast_address: "multicast-relay.default.svc.cluster.local"
+    multicast_port: 9999
+    api_port: 8080
+    log_level: "info"
+    data_file: "/data/data.yaml"
+  data.yaml: |
     data:
       - id: "1"
         user: "Alice"
@@ -42,7 +56,14 @@ kind: ConfigMap
 metadata:
   name: node-config-2
 data:
-  config-2.yaml: |
+  config.yaml: |
+    node_id: "node-2"
+    multicast_address: "multicast-relay.default.svc.cluster.local"
+    multicast_port: 9999
+    api_port: 8080
+    log_level: "info"
+    data_file: "/data/data.yaml"
+  data.yaml: |
     data:
       - id: "3"
         user: "Charlie"

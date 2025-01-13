@@ -11,7 +11,10 @@ import (
 )
 
 func main() {
-	cfg := config.LoadConfig()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		panic(err)
+	}
 
 	nodeID := cfg.NodeID
 	if nodeID == "" {
@@ -19,7 +22,7 @@ func main() {
 		nodeID, _ = os.Hostname()
 	}
 
-	dataFile := "data.yaml" // Default data file
+	dataFile := cfg.DataFile
 	fmt.Printf("Starting node %s with data %s\n", nodeID, dataFile)
 
 	// Load data
