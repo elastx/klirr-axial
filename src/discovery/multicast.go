@@ -172,7 +172,8 @@ func StartMulticastListener(cfg config.Config, conn *MulticastConnection) {
 
 		// If src doesn't contain cfg.MulticastPort, ignore the message
 		if !strings.Contains(src.String(), fmt.Sprintf(":%d", cfg.MulticastPort)) {
-			continue
+			fmt.Printf("Wrong port! %s", src)
+			// continue
 		}
 
 		message := string(buffer[:n])
