@@ -6,6 +6,8 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/net/ipv4"
+
 	"axial/config"
 )
 
@@ -28,35 +30,45 @@ func CreateMulticastSocket(cfg config.Config) (*net.UDPConn, error) {
 	}
 
 	err = rawConn.Control(func(fd uintptr) {
-		err := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
-		if err != nil {
-			return
-		}
-		err = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEPORT, 1)
-		if err != nil {
-			return
-		}
-
 		// Check if MulticastAddress is an IP address or hostname
 		multicastIP := net.ParseIP(cfg.MulticastAddress)
 		if multicastIP == nil {
 			// Resolve hostname to IP address
 			multicastIPs, err := net.LookupIP(cfg.MulticastAddress)
 			if err != nil {
-				return
+				panic(fmt.Errorf("failed to resolve multicast address: %v", err))
 			}
 			multicastIP = multicastIPs[0]
 		}
 
 		// Join multicast group
-		mreq := syscall.IPMreq{
-			Multiaddr: [4]byte(multicastIP),
-			Interface: [4]byte{0, 0, 0, 0},   // 0.0.0.0 (any interface)
+		p := ipv4.NewPacketConn(conn)
+		ifaces, err := net.Interfaces()
+		if err != nil {
+			panic(fmt.Errorf("failed to get network interfaces: %v", err))
 		}
 
-		err = syscall.SetsockoptIPMreq(int(fd), syscall.IPPROTO_IP, syscall.IP_ADD_MEMBERSHIP, &mreq)
+		var iface *net.Interface
+		for _, i := range ifaces {
+			if i.Flags&net.FlagMulticast != 0 {
+				iface = &i
+				break
+			}
+		}
+
+		if iface == nil {
+			panic(fmt.Errorf("no multicast-enabled interface found"))
+		}
+
+		err = p.JoinGroup(iface, &net.UDPAddr{IP: multicastIP})
 		if err != nil {
-			return
+			panic(fmt.Errorf("failed to join multicast group: %v", err))
+		}
+
+		// Set multicast TTL
+		err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_MULTICAST_TTL, 2)
+		if err != nil {
+			panic(fmt.Errorf("failed to set multicast TTL: %v", err))
 		}
 	})
 	if err != nil {
