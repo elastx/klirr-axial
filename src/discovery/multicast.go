@@ -90,6 +90,18 @@ func setupMulticastConn(cfg config.Config, iface *net.Interface, addr *net.UDPAd
 	}
 
 	err = rawConn.Control(func(fd uintptr) {
+		// Allow multiple sockets to use the same port
+		err := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+		if err != nil {
+			panic(fmt.Errorf("failed to set SO_REUSEADDR: %v", err))
+		}
+
+		// Allow sending to loopback interface
+		err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_MULTICAST_LOOP, 1)
+		if err != nil {
+			panic(fmt.Errorf("failed to set IP_MULTICAST_LOOP: %v", err))
+		}
+
 		// Check if MulticastAddress is an IP address or hostname
 		multicastIP := net.ParseIP(cfg.MulticastAddress)
 		if multicastIP == nil {
@@ -151,26 +163,15 @@ func StartMulticastListener(cfg config.Config, conn *net.UDPConn) {
 	buffer := make([]byte, 4096)
 
 	for {
-		n, src, err := conn.ReadFromUDP(buffer)
-		if err != nil {
-			fmt.Println("Error receiving message:", err)
-			continue
-		}
-		message := string(buffer[:n])
-
-		if src.IP.String() == getLocalIP() {
-			// Skip messages from ourselves
-			continue
-		}
-
-		// Skip those that don't contain the defined multicast port
-		if src.Port != cfg.MulticastPort {
-			continue
-		}
-
-		// Add debug output
-		fmt.Printf("Raw bytes received from %s: %v\n", src, buffer[:n])
-		fmt.Printf("Node %s received from %s: %s\n", cfg.NodeID, src, message)
+			n, src, err := conn.ReadFromUDP(buffer)
+			if err != nil {
+					fmt.Println("Error receiving message:", err)
+					continue
+			}
+			
+			fmt.Printf("Received %d bytes from %s\n", n, src)
+			fmt.Printf("Raw bytes: %v\n", buffer[:n])
+			fmt.Printf("As string: %q\n", buffer[:n])
 	}
 }
 
@@ -178,24 +179,25 @@ func StartBroadcast(cfg config.Config, hash string, addr string, conn *Multicast
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
-	localIP := getLocalIP()
+	// Start with a simple test message
+	testMessage := []byte("test\n")
 
-	// Resolve multicast address to an IP address
 	targetAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%d", cfg.MulticastAddress, cfg.MulticastPort))
 	if err != nil {
 		fmt.Printf("Error resolving multicast address: %v\n", err)
 		return
 	}
 
-	fmt.Printf("Starting broadcast from %s to %s\n", localIP, targetAddr)
+	fmt.Printf("Starting broadcast to %s\n", targetAddr)
 
 	for range ticker.C {
-		message := fmt.Sprintf("%s|%s|%s|%s", cfg.NodeID, hash, addr, localIP)
-		_, err := conn.Conn.WriteToUDP([]byte(fmt.Sprintf("%s\n", message)), targetAddr)
+		_, err := conn.Conn.WriteToUDP(testMessage, targetAddr)
 		if err != nil {
 			fmt.Printf("Error sending multicast message: %v\n", err)
 		} else {
-			fmt.Printf("Broadcasted: %s. Interface: %s\n", message, conn.iface.Name)
+			fmt.Printf("Broadcasted test message\n")
+			// Print the raw bytes we're sending
+			fmt.Printf("Raw bytes sent: %v\n", testMessage)
 		}
 	}
 }
