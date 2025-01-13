@@ -5,42 +5,50 @@ import (
 	"os"
 
 	"axial/api"
+	"axial/config"
 	"axial/data"
 	"axial/discovery"
 )
 
 func main() {
-    nodeID := os.Getenv("NODE_ID")
-    dataFile := os.Getenv("DATA_FILE")
+	cfg := config.LoadConfig()
 
-    fmt.Printf("Starting node %s with data %s\n", nodeID, dataFile)
+	nodeID := cfg.NodeID
+	if nodeID == "" {
+		// Default to hostname
+		nodeID, _ = os.Hostname()
+	}
 
-    // Load data
-    loadedData, err := data.LoadData(dataFile)
-    if err != nil {
-        panic(err)
-    }
-    convertedData := make([]api.DataBlock, len(loadedData))
-    for i, v := range loadedData {
-        convertedData[i] = api.DataBlock(v)
-    }
-    api.SetData(convertedData)
+	dataFile := "data.yaml" // Default data file
+	fmt.Printf("Starting node %s with data %s\n", nodeID, dataFile)
 
-    // Calculate initial hash
-    hash := data.CalculateHash(loadedData)
-    fmt.Printf("Node %s hash: %s\n", nodeID, hash)
+	// Load data
+	loadedData, err := data.LoadData(dataFile)
+	if err != nil {
+		panic(err)
+	}
 
-    // Create single multicast socket
-    conn, err := discovery.CreateMulticastSocket()
-    if err != nil {
-        panic(err)
-    }
-    defer conn.Close()
+	convertedData := make([]data.DataBlock, len(loadedData))
+	for i, v := range loadedData {
+		convertedData[i] = data.DataBlock(v)
+	}
+	api.SetData(convertedData)
 
-    // Start services
-    go discovery.StartMulticastListener(nodeID, conn)
-    go discovery.StartBroadcast(nodeID, hash, ":8080", conn)
-    go api.StartHTTPServer()
+	// Calculate initial hash
+	hash := data.CalculateHash(loadedData)
+	fmt.Printf("Node %s hash: %s\n", nodeID, hash)
 
-    select {}
+	// Create single multicast socket
+	conn, err := discovery.CreateMulticastSocket(cfg)
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
+
+	// Start services
+	go discovery.StartMulticastListener(cfg, conn)
+	go discovery.StartBroadcast(cfg, hash, fmt.Sprintf(":%d", cfg.APIPort), conn)
+	go api.StartHTTPServer()
+
+	select {}
 }
