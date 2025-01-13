@@ -18,7 +18,13 @@ spec:
         volumeMounts:
         - name: data-volume
           mountPath: /data
+        - name: config-volume
+          mountPath: /app/config.yaml
+          subPath: config.yaml
       volumes:
       - name: data-volume
+        configMap:
+          name: node-config-0
+      - name: config-volume
         configMap:
           name: node-config-0

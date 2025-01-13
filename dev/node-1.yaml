@@ -16,16 +16,16 @@ spec:
       - name: node
         image: node:latest
         env:
-        - name: NODE_ID
-          value: "node-1"
-        - name: DATA_FILE
-          value: "/data/config-1.yaml"
-        - name: MULTICAST_ADDRESS
-          value: "multicast-relay.default.svc.cluster.local"  # because real multicast doesn't work in k8s
         volumeMounts:
         - name: data-volume
           mountPath: /data
+        - name: config-volume
+          mountPath: /app/config.yaml
+          subPath: config.yaml
       volumes:
       - name: data-volume
+        configMap:
+          name: node-config-1
+      - name: config-volume
         configMap:
           name: node-config-1

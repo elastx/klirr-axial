@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 
 	"gopkg.in/yaml.v2"
@@ -13,8 +14,13 @@ func LoadConfig() (Config, error) {
 	file, err := os.Open("config.yaml")
 	if err != nil {
 		if os.IsNotExist(err) {
+			fmt.Println("Config file not found, using default values")
+			hostname, err := os.Hostname()
+			if err != nil {
+				hostname = "no-hostname"
+			}
 			cfg = Config{
-				NodeID:           "default",
+				NodeID:           fmt.Sprintf("axial-%s", hostname),
 				MulticastAddress: "239.192.0.1",
 				MulticastPort:    9999,
 				APIPort:          8080,
@@ -33,5 +39,8 @@ func LoadConfig() (Config, error) {
 		return cfg, err
 	}
 	
+	fmt.Println("Config loaded from config.yaml:")
+	fmt.Printf("%+v\n", cfg)
+
 	return cfg, nil
 }

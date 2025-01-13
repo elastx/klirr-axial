@@ -3,7 +3,6 @@ package discovery
 import (
 	"fmt"
 	"net"
-	"os"
 	"syscall"
 	"time"
 
@@ -51,7 +50,7 @@ func CreateMulticastSocket(cfg config.Config) (*net.UDPConn, error) {
 
 		// Join multicast group
 		mreq := syscall.IPMreq{
-			Multiaddr: [4]byte{multicastIP[12], multicastIP[13], multicastIP[14], multicastIP[15]},
+			Multiaddr: [4]byte(multicastIP),
 			Interface: [4]byte{0, 0, 0, 0},   // 0.0.0.0 (any interface)
 		}
 
@@ -99,14 +98,8 @@ func StartBroadcast(cfg config.Config, hash string, addr string, conn *net.UDPCo
 
 	localIP := getLocalIP()
 
-	// Use multicast address from environment variable, fallback to relay service
-	multicastAddress := os.Getenv("MULTICAST_ADDRESS")
-	if multicastAddress == "" {
-		multicastAddress = "239.192.0.1"
-	}
-
 	// Resolve multicast address to an IP address
-	targetAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:9999", multicastAddress))
+	targetAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:9999", cfg.MulticastAddress))
 	if err != nil {
 		fmt.Printf("Error resolving multicast address: %v\n", err)
 		return
