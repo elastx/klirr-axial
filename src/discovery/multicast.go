@@ -80,80 +80,87 @@ func CreateMulticastSockets(cfg config.Config) ([]MulticastConnection, error) {
 func setupMulticastConn(cfg config.Config, iface *net.Interface, addr *net.UDPAddr) (*net.UDPConn, error) {
 	conn, err := net.ListenMulticastUDP("udp4", iface, addr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create socket: %v. Addr: %v", err, addr)
+			return nil, fmt.Errorf("failed to create socket: %v. Addr: %v", err, addr)
+	}
+
+	p := ipv4.NewPacketConn(conn)
+
+	// Set the interface for outgoing multicast traffic
+	if err := p.SetMulticastInterface(iface); err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("SetMulticastInterface failed: %v", err)
+	}
+
+	// Enable multicast loopback
+	if err := p.SetMulticastLoopback(true); err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("SetMulticastLoopback failed: %v", err)
 	}
 
 	// Set socket options using raw fd
 	rawConn, err := conn.SyscallConn()
 	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to get raw connection: %v", err)
+			conn.Close()
+			return nil, fmt.Errorf("failed to get raw connection: %v", err)
 	}
 
 	err = rawConn.Control(func(fd uintptr) {
-		// Allow multiple sockets to use the same port
-		err := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
-		if err != nil {
-			panic(fmt.Errorf("failed to set SO_REUSEADDR: %v", err))
-		}
+			// Allow multiple sockets to use the same port
+			err := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+			if err != nil {
+					panic(fmt.Errorf("failed to set SO_REUSEADDR: %v", err))
+			}
 
-		// Allow sending to loopback interface
-		err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_MULTICAST_LOOP, 1)
-		if err != nil {
-			panic(fmt.Errorf("failed to set IP_MULTICAST_LOOP: %v", err))
-		}
+			// Allow sending to loopback interface
+			err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_MULTICAST_LOOP, 1)
+			if err != nil {
+					panic(fmt.Errorf("failed to set IP_MULTICAST_LOOP: %v", err))
+			}
 
-		// Check if MulticastAddress is an IP address or hostname
-		multicastIP := net.ParseIP(cfg.MulticastAddress)
-		if multicastIP == nil {
+			// Set multicast TTL
+			err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_MULTICAST_TTL, 2)
+			if err != nil {
+					panic(fmt.Errorf("failed to set multicast TTL: %v", err))
+			}
+	})
+	if err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("failed to set socket options: %v", err)
+	}
+
+	// Check if MulticastAddress is an IP address or hostname
+	multicastIP := net.ParseIP(cfg.MulticastAddress)
+	if multicastIP == nil {
 			// Resolve hostname to IP address
 			multicastIPs, err := net.LookupIP(cfg.MulticastAddress)
 			if err != nil {
-				panic(fmt.Errorf("failed to resolve multicast address: %v", err))
+					conn.Close()
+					return nil, fmt.Errorf("failed to resolve multicast address: %v", err)
 			}
 			multicastIP = multicastIPs[0]
-		}
-
-		// Join multicast group
-		p := ipv4.NewPacketConn(conn)
-
-		fmt.Printf("Joining multicast group %s on interface %s\n", multicastIP, iface.Name)
-
-		err = p.SetMulticastInterface(iface)
-		if err != nil {
-			panic(fmt.Errorf("failed to set multicast interface: %v", err))
-		}
-
-		// Leave the multicast group if already joined
-		err = p.LeaveGroup(iface, &net.UDPAddr{IP: multicastIP})
-		if err != nil {
-			fmt.Printf("Failed to leave multicast group: %v\n", err)
-		}
-
-		err = p.JoinGroup(iface, &net.UDPAddr{IP: multicastIP})
-		if err != nil {
-			panic(fmt.Errorf("failed to join multicast group: %v. Args: %+v %+v", err, iface, &net.UDPAddr{IP: multicastIP}))
-		}
-
-		// Set multicast TTL
-		err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_MULTICAST_TTL, 2)
-		if err != nil {
-			panic(fmt.Errorf("failed to set multicast TTL: %v", err))
-		}
-	})
-	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to set socket options: %v", err)
 	}
 
+	// Force leave and rejoin of the multicast group
+	if err := p.LeaveGroup(iface, &net.UDPAddr{IP: multicastIP}); err != nil {
+			fmt.Printf("Warning: failed to leave multicast group: %v\n", err)
+	}
+
+	if err := p.JoinGroup(iface, &net.UDPAddr{IP: multicastIP}); err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("failed to join multicast group: %v", err)
+	}
+
+	fmt.Printf("Successfully joined multicast group %s on interface %s\n", multicastIP, iface.Name)
+
+	// Set buffer sizes
 	if err := conn.SetReadBuffer(1048576); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to set read buffer: %v", err)
+			conn.Close()
+			return nil, fmt.Errorf("failed to set read buffer: %v", err)
 	}
 
 	if err := conn.SetWriteBuffer(1048576); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to set write buffer: %v", err)
+			conn.Close()
+			return nil, fmt.Errorf("failed to set write buffer: %v", err)
 	}
 
 	return conn, nil
@@ -164,28 +171,30 @@ func StartMulticastListener(cfg config.Config, conn *MulticastConnection) {
 	buffer := make([]byte, 4096)
 
 	for {
-		n, src, err := conn.Conn.ReadFromUDP(buffer)
-		if err != nil {
-			fmt.Println("Error receiving message:", err)
-			continue
-		}
+			n, src, err := conn.Conn.ReadFromUDP(buffer)
+			if err != nil {
+					fmt.Println("Error receiving message:", err)
+					continue
+			}
 
-		// If src doesn't contain cfg.MulticastPort, ignore the message
-		if !strings.Contains(src.String(), fmt.Sprintf(":%d", cfg.MulticastPort)) {
-			fmt.Printf("Wrong port! %s", src)
-			// continue
-		}
+			message := string(buffer[:n])
 
-		message := string(buffer[:n])
+			// Check for both our configured port and the Mac's port (60090)
+			if !strings.Contains(src.String(), fmt.Sprintf(":%d", cfg.MulticastPort)) {
+					if strings.Contains(src.String(), ":60090") {
+							fmt.Printf("Got message on port 60090 from %s: %q\n", src, message)
+					} else {
+							fmt.Printf("Message on unexpected port from %s\n", src)
+					}
+			}
 
-		// Only process messages that look like ours (4 pipe-separated fields)
-		if parts := strings.Split(message, "|"); len(parts) == 4 {
-			fmt.Printf("IF: %s\tRECV: %s (from %s)\n", conn.iface.Name, message, src)
-		} else {
-			// Debug log for non-matching messages
-			fmt.Printf("Ignored non-axial message from %s (len=%d)\n",
-				src, len(message))
-		}
+			// Only process messages that look like ours (4 pipe-separated fields)
+			if parts := strings.Split(message, "|"); len(parts) == 4 {
+					fmt.Printf("IF: %s\tRECV: %s (from %s)\n", conn.iface.Name, message, src)
+			} else {
+					// Debug log for non-matching messages
+					fmt.Printf("Ignored non-axial message from %s (len=%d)\n", src, len(message))
+			}
 	}
 }
 
