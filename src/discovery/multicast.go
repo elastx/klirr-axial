@@ -149,8 +149,8 @@ func setupMulticastConn(cfg config.Config, iface *net.Interface, addr *net.UDPAd
 			}
 		}
 
-		// Enable multicast loopback
-		if err := p.SetMulticastLoopback(true); err != nil {
+		// Disable multicast loopback
+		if err := p.SetMulticastLoopback(false); err != nil {
 			conn.Close()
 			return nil, fmt.Errorf("SetMulticastLoopback failed: %v", err)
 		}
