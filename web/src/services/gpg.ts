@@ -39,27 +39,27 @@ export class GPGService {
     const publicKey = await openpgp.readKey({
       armoredKey: this.currentKeyPair.publicKey,
     });
-    const userIds = publicKey.users[0]?.userID;
-    if (!userIds) return null;
+    const user = publicKey.users[0];
+    if (!user) return null;
 
     return {
-      name: userIds.name,
-      email: userIds.email,
-      fingerprint: this.currentKeyPair.fingerprint,
+      name: user.userID?.name || "",
+      email: user.userID?.email || "",
+      fingerprint: publicKey.getFingerprint(),
       publicKey: this.currentKeyPair.publicKey,
     };
   }
 
   async extractUserInfo(publicKeyArmored: string): Promise<UserInfo> {
     const publicKey = await openpgp.readKey({ armoredKey: publicKeyArmored });
-    const userIds = publicKey.users[0]?.userID;
-    if (!userIds) {
+    const user = publicKey.users[0];
+    if (!user) {
       throw new Error("No user information found in key");
     }
 
     return {
-      name: userIds.name,
-      email: userIds.email,
+      name: user.userID?.name || "",
+      email: user.userID?.email || "",
       fingerprint: publicKey.getFingerprint(),
       publicKey: publicKeyArmored,
     };

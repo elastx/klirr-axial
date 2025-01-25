@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Stack, Text, Paper, Button, Group } from "@mantine/core";
+import { useEffect, useState } from "react";
+import { Stack, Text, Button, Group, Card } from "@mantine/core";
 import { APIService } from "../services/api";
 import { GPGService } from "../services/gpg";
 import { User } from "../types";
@@ -7,29 +7,25 @@ import { User } from "../types";
 export function UserList() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [registered, setRegistered] = useState(false);
+  const [isRegistered, setIsRegistered] = useState(false);
 
-  const apiService = APIService.getInstance();
-  const gpgService = GPGService.getInstance();
-
-  useEffect(() => {
-    loadUsers();
-  }, []);
+  const api = APIService.getInstance();
+  const gpg = GPGService.getInstance();
 
   const loadUsers = async () => {
     try {
-      const userList = await apiService.getUsers();
-      setUsers(userList);
+      const fetchedUsers = await api.getUsers();
+      setUsers(fetchedUsers);
 
       // Check if current user is registered
-      const currentFingerprint = gpgService.getCurrentFingerprint();
-      if (currentFingerprint) {
-        setRegistered(
-          userList.some((u) => u.fingerprint === currentFingerprint)
+      const currentUser = await gpg.getCurrentUserInfo();
+      if (currentUser) {
+        setIsRegistered(
+          fetchedUsers.some((u) => u.fingerprint === currentUser.fingerprint)
         );
       }
-    } catch {
-      // Failed to load users - UI will show empty state
+    } catch (error) {
+      console.error("Failed to load users:", error);
     } finally {
       setLoading(false);
     }
@@ -37,16 +33,21 @@ export function UserList() {
 
   const handleRegister = async () => {
     try {
-      const userInfo = await gpgService.getCurrentUserInfo();
-      if (!userInfo) return;
+      const userInfo = await gpg.getCurrentUserInfo();
+      if (!userInfo) {
+        throw new Error("No key loaded");
+      }
 
-      await apiService.registerUser(userInfo);
-      setRegistered(true);
-      await loadUsers(); // Reload the user list
-    } catch {
-      // Registration failed - UI state won't change
+      await api.registerUser(userInfo);
+      await loadUsers(); // Refresh the list
+    } catch (error) {
+      console.error("Failed to register:", error);
     }
   };
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
 
   if (loading) {
     return <Text>Loading users...</Text>;
@@ -54,28 +55,23 @@ export function UserList() {
 
   return (
     <Stack>
-      <Group justify="space-between">
-        <Text fw={500}>Users</Text>
-        {!registered && (
-          <Button variant="light" onClick={handleRegister}>
-            Register
-          </Button>
-        )}
-      </Group>
-      {users.length === 0 ? (
-        <Text c="dimmed">No users registered yet</Text>
-      ) : (
-        users.map((user) => (
-          <Paper key={user.fingerprint} p="sm" withBorder>
-            <Stack gap="xs">
-              <Text fw={500}>{user.fingerprint}</Text>
-              <Text size="sm" style={{ wordBreak: "break-all" }}>
-                {user.public_key}
-              </Text>
-            </Stack>
-          </Paper>
-        ))
+      {!isRegistered && (
+        <Group justify="center">
+          <Button onClick={handleRegister}>Register</Button>
+        </Group>
       )}
+
+      <Stack gap="md">
+        {users.map((user) => (
+          <Card key={user.id} shadow="sm" p="md">
+            <Text size="sm" c="dimmed">
+              Fingerprint: {user.fingerprint}
+            </Text>
+            {user.name && <Text>Name: {user.name}</Text>}
+            {user.email && <Text>Email: {user.email}</Text>}
+          </Card>
+        ))}
+      </Stack>
     </Stack>
   );
 }

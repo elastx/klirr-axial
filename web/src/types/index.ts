@@ -1,14 +1,16 @@
 export interface Message {
-  id: string;
+  id: number;
+  topic: string;
+  content: string;
+  fingerprint: string;
   created_at: string;
-  body: string;
-  recipient: string;
-  sender: string;
-  signature: string;
 }
 
 export interface User {
+  id: number;
   fingerprint: string;
+  name: string;
+  email: string;
   public_key: string;
 }
 
