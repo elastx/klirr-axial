@@ -36,6 +36,7 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("failed to calculate database hash: %v", err))
 	}
+	models.UpdateHash(hash)
 	fmt.Printf("Node %s hash: %s\n", nodeID, hash)
 
 	// Create single multicast socket
