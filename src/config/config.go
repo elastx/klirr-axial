@@ -26,6 +26,13 @@ func LoadConfig() (Config, error) {
 				APIPort:          8080,
 				LogLevel:         "info",
 				DataFile:         "data.yaml",
+				Database: DatabaseConfig{
+					Host:     "localhost",
+					Port:     5432,
+					User:     "axial",
+					Password: "development_only",
+					Name:     "axial",
+				},
 			}
 			return cfg, nil
 		}

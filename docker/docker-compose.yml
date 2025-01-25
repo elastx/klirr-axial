@@ -1,0 +1,53 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: axial-postgres
+    environment:
+      POSTGRES_DB: axial
+      POSTGRES_USER: axial
+      POSTGRES_PASSWORD: development_only
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U axial"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    stop_grace_period: 30s
+    networks:
+      - axial_net
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: axial-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: development_only
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+      PGADMIN_CONFIG_CHECK_EMAIL_DELIVERABILITY: 'False'
+      PGADMIN_CONFIG_SAVE_PASSWORDS: 'True'
+      PGADMIN_CONFIG_AUTO_CONNECT: 'True'
+    ports:
+      - "5050:80"
+    volumes:
+      - ./pgadmin-config/servers.json:/pgadmin4/servers.json:ro
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - axial_net
+
+volumes:
+  postgres_data:
+    name: axial_postgres_data
+  pgadmin_data:
+    name: axial_pgadmin_data
+
+networks:
+  axial_net:
+    driver: bridge 

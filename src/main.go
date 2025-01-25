@@ -7,6 +7,7 @@ import (
 	"axial/api"
 	"axial/config"
 	"axial/data"
+	"axial/database"
 	"axial/discovery"
 )
 
@@ -20,6 +21,12 @@ func main() {
 	if nodeID == "" {
 		// Default to hostname
 		nodeID, _ = os.Hostname()
+	}
+
+	// Initialize database connection
+	err = database.Connect(cfg.Database)
+	if err != nil {
+		panic(fmt.Errorf("failed to initialize database: %v", err))
 	}
 
 	dataFile := cfg.DataFile
@@ -44,13 +51,13 @@ func main() {
 	// Create single multicast socket
 	connections, err := discovery.CreateMulticastSockets(cfg)
 	if err != nil {
-			panic(err)
+		panic(err)
 	}
 	
 	for _, conn := range connections {
-			defer conn.Conn.Close()
-			go discovery.StartMulticastListener(cfg, &conn)
-			go discovery.StartBroadcast(cfg, hash, &conn)
+		defer conn.Conn.Close()
+		go discovery.StartMulticastListener(cfg, &conn)
+		go discovery.StartBroadcast(cfg, hash, &conn)
 	}
 	go api.StartHTTPServer()
 

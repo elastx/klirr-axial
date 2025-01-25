@@ -1,0 +1,16 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Axial PostgreSQL",
+      "Group": "Servers",
+      "Host": "axial-postgres",
+      "Port": 5432,
+      "MaintenanceDB": "axial",
+      "Username": "axial",
+      "Password": "development_only",
+      "SSLMode": "prefer",
+      "SavePassword": true,
+      "Connected": true
+    }
+  }
+}
