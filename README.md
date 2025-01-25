@@ -121,13 +121,22 @@ Example Integrations:
 
 2. Build the application:
    ```bash
-   go build -o node-app .
+   go build .
    ```
 
 3. Run a single instance:
    ```bash
-   ./node-app --config /path/to/config.yaml
+   ./axial --config /path/to/config.yaml
    ```
+
+#### Running on macOS
+
+On macOS, the application requires root privileges to send broadcast messages. You can run it with:
+
+```bash
+sudo ./axial --config /path/to/config.yaml
+```
+
 
 ### Using Tilt for Local Testing
 1. Install Tilt:
