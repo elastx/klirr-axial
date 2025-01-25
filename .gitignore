@@ -6,3 +6,6 @@ dev/multus-daemonset.yaml
 
 # Build artifacts
 src/axial
+
+# Frontend build files
+src/frontend/dist/

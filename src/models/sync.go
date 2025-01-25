@@ -37,7 +37,7 @@ type SyncRequest struct {
 type SyncResponse struct {
 	NodeID   string         `json:"node_id"`
 	Hash     string         `json:"hash"`
-	IsBusy   bool          `json:"is_busy"`
+	IsBusy   bool           `json:"is_busy"`
 	Ranges   []HashedPeriod `json:"ranges,omitempty"`
 	Users    []User         `json:"users,omitempty"`
 	Messages []Message      `json:"messages,omitempty"`
@@ -47,11 +47,11 @@ type SyncResponse struct {
 func StartSync() bool {
 	syncState.mu.Lock()
 	defer syncState.mu.Unlock()
-	
+
 	if syncState.isSyncing {
 		return false
 	}
-	
+
 	syncState.isSyncing = true
 	return true
 }
@@ -96,7 +96,7 @@ func getWeekStart(t time.Time) time.Time {
 // GenerateHashRanges creates the standard set of time ranges to check
 func GenerateHashRanges(db *gorm.DB) ([]HashedPeriod, error) {
 	now := time.Now().UTC()
-	
+
 	// Calculate period boundaries
 	thisWeekStart := getWeekStart(now)
 	lastWeekStart := thisWeekStart.AddDate(0, 0, -7)
@@ -139,38 +139,38 @@ func GenerateHashRanges(db *gorm.DB) ([]HashedPeriod, error) {
 	ranges := []HashedPeriod{
 		// Users (no time range)
 		{Hash: usersHash},
-		
+
 		// Current partial week
 		{
 			Start: &thisWeekStart,
 			End:   &now,
 			Hash:  currentWeekHash,
 		},
-		
+
 		// Previous week
 		{
 			Start: &lastWeekStart,
 			End:   &thisWeekStart,
 			Hash:  lastWeekHash,
 		},
-		
+
 		// Previous four weeks
 		{
 			Start: &fourWeeksStart,
 			End:   &lastWeekStart,
 			Hash:  fourWeeksHash,
 		},
-		
+
 		// Previous six months
 		{
 			Start: &sixMonthsStart,
 			End:   &fourWeeksStart,
 			Hash:  sixMonthsHash,
 		},
-		
+
 		// Everything before six months
 		{
-			End: &sixMonthsStart,
+			End:  &sixMonthsStart,
 			Hash: oldestHash,
 		},
 	}
@@ -182,7 +182,7 @@ func GenerateHashRanges(db *gorm.DB) ([]HashedPeriod, error) {
 func SplitTimeRange(start, end time.Time, n int) []HashedPeriod {
 	duration := end.Sub(start)
 	partDuration := duration / time.Duration(n)
-	
+
 	ranges := make([]HashedPeriod, n)
 	for i := 0; i < n; i++ {
 		partStart := start.Add(partDuration * time.Duration(i))
@@ -190,12 +190,12 @@ func SplitTimeRange(start, end time.Time, n int) []HashedPeriod {
 		if i == n-1 {
 			partEnd = end // Ensure we don't miss any time due to rounding
 		}
-		
+
 		ranges[i] = HashedPeriod{
 			Start: &partStart,
 			End:   &partEnd,
 		}
 	}
-	
+
 	return ranges
-} 
+}

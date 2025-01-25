@@ -1,15 +1,15 @@
 CLUSTER_NAME := axial
 
 # Development environment with PostgreSQL and Go app
-run:
-	@echo "Starting PostgreSQL and pgAdmin..."
-	@cd docker && docker compose up -d
+src/axial: src/frontend/dist
 	@echo "Building Go application..."
 	@cd src && go build -o axial
+
+run: src/axial
+	@echo "Starting PostgreSQL and pgAdmin..."
+	@cd docker && docker compose up -d
 	@echo "Starting application..."
 	@cd src && sudo ./axial || true
-	@echo "Cleaning up..."
-	@cd docker && docker compose down
 
 dev-env:
 	@$(MAKE) cluster-exists || ( \
@@ -20,6 +20,14 @@ dev-env:
 
 clean:
 	# Clean up other dangling resources
+	@echo "Cleaning web/dist..."
+	@rm -rf web/dist
+	@echo "Cleaning web/node_modules..."
+	@rm -rf web/node_modules
+	@echo "Cleaning src/frontend/dist..."
+	@rm -rf src/frontend/dist
+	@echo "Cleaning src/axial..."
+	@rm -rf src/axial
 	@echo "Cleaning up any leftover containers and volumes..."
 	@cd docker && docker compose down -v
 	@docker volume rm axial_postgres_data 2>/dev/null || true
@@ -27,9 +35,18 @@ clean:
 	@docker volume ls --filter "dangling=true" --format '{{.Name}}' | xargs -r docker volume rm
 	@docker system prune --force --volumes >/dev/null
 
-
-.PHONY: dev-env create-cluster delete-cluster cluster-exists clean run
+.PHONY: dev-env create-cluster delete-cluster cluster-exists clean run build-frontend
 
 # Check if the cluster exists
 cluster-exists:
 	@kind get clusters | grep -q "^$(CLUSTER_NAME)$$" || false
+
+web/node_modules:
+	@echo "Installing node modules..."
+	@cd web && npm install
+
+web/dist: web/node_modules
+	cd web && npm install && npm run build
+
+src/frontend/dist: web/dist
+	./scripts/copy-frontend.sh
