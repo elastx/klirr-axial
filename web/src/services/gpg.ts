@@ -65,6 +65,27 @@ export class GPGService {
     };
   }
 
+  async generateKey(name: string, email: string): Promise<void> {
+    const { privateKey: rawPrivateKey, publicKey: rawPublicKey } =
+      await openpgp.generateKey({
+        type: "ecc",
+        curve: "curve25519",
+        userIDs: [{ name, email }],
+        format: "armored",
+      });
+
+    const publicKey = await openpgp.readKey({ armoredKey: rawPublicKey });
+    const fingerprint = publicKey.getFingerprint();
+
+    this.currentKeyPair = {
+      privateKey: rawPrivateKey,
+      publicKey: rawPublicKey,
+      fingerprint,
+    };
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.currentKeyPair));
+  }
+
   async importPrivateKey(privateKeyArmored: string): Promise<KeyPair> {
     if (!privateKeyArmored || typeof privateKeyArmored !== "string") {
       throw new Error("No key provided");
