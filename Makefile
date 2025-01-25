@@ -11,12 +11,11 @@ run: src/axial
 	@echo "Starting application..."
 	@cd src && sudo ./axial || true
 
-dev-env:
-	@$(MAKE) cluster-exists || ( \
-		echo "Creating kind cluster '$(CLUSTER_NAME)'..."; \
-		kind create cluster --name $(CLUSTER_NAME); \
-	)
-	@echo "Run \`tilt up\` to start the development environment."
+dev: src/axial
+	@echo "Starting PostgreSQL and pgAdmin..."
+	@cd docker && docker compose up -d
+	@echo "Starting application in development mode..."
+	sudo src/axial
 
 clean:
 	# Clean up other dangling resources
@@ -35,7 +34,7 @@ clean:
 	@docker volume ls --filter "dangling=true" --format '{{.Name}}' | xargs -r docker volume rm
 	@docker system prune --force --volumes >/dev/null
 
-.PHONY: dev-env create-cluster delete-cluster cluster-exists clean run build-frontend
+.PHONY: dev-env create-cluster delete-cluster cluster-exists clean run dev
 
 # Check if the cluster exists
 cluster-exists:
@@ -45,8 +44,5 @@ web/node_modules:
 	@echo "Installing node modules..."
 	@cd web && npm install
 
-web/dist: web/node_modules
+src/frontend/dist: web/node_modules
 	cd web && npm install && npm run build
-
-src/frontend/dist: web/dist
-	./scripts/copy-frontend.sh

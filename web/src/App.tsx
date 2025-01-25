@@ -9,10 +9,12 @@ import {
   Stack,
   Group,
   Paper,
+  Tabs,
 } from "@mantine/core";
 import { GPGService } from "./services/gpg";
 import { APIService } from "./services/api";
 import { Message, Topic } from "./types";
+import { KeyGeneration } from "./components/KeyGeneration";
 
 function App() {
   const [privateKey, setPrivateKey] = useState("");
@@ -117,17 +119,37 @@ function App() {
           <Group align="flex-start" grow>
             <Box style={{ flexBasis: "300px", flexGrow: 0 }}>
               {!isKeyLoaded ? (
-                <Stack>
-                  <Text>Import your GPG private key to start:</Text>
-                  <Textarea
-                    placeholder="Paste your private key here"
-                    value={privateKey}
-                    onChange={(e) => setPrivateKey(e.currentTarget.value)}
-                    minRows={3}
-                    autosize
-                  />
-                  <Button onClick={handleKeyImport}>Import Key</Button>
-                </Stack>
+                <Paper p="md" withBorder>
+                  <Tabs defaultValue="import">
+                    <Tabs.List>
+                      <Tabs.Tab value="import">Import Key</Tabs.Tab>
+                      <Tabs.Tab value="generate">Generate Key</Tabs.Tab>
+                    </Tabs.List>
+
+                    <Tabs.Panel value="import" pt="md">
+                      <Stack>
+                        <Text>Import your GPG private key:</Text>
+                        <Textarea
+                          placeholder="Paste your private key here"
+                          value={privateKey}
+                          onChange={(e) => setPrivateKey(e.currentTarget.value)}
+                          minRows={3}
+                          autosize
+                        />
+                        <Button onClick={handleKeyImport}>Import Key</Button>
+                      </Stack>
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="generate" pt="md">
+                      <KeyGeneration
+                        onKeyGenerated={(key) => {
+                          setPrivateKey(key);
+                          handleKeyImport();
+                        }}
+                      />
+                    </Tabs.Panel>
+                  </Tabs>
+                </Paper>
               ) : (
                 <Stack>
                   <Text fw={500}>Topics:</Text>
