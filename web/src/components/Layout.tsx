@@ -16,8 +16,13 @@ import {
   IconMessages,
   IconKey,
   IconLogout,
+  IconNotes,
 } from "@tabler/icons-react";
 import { GPGService } from "../services/gpg";
+import { UserList } from "./UserList";
+import { Messages } from "./Messages";
+import { KeyManagement } from "./KeyManagement";
+import { BulletinBoard } from "./BulletinBoard";
 import classes from "./Layout.module.css";
 
 interface MainLinkProps {
@@ -45,7 +50,7 @@ function MainLink({ icon, color, label, active, onClick }: MainLinkProps) {
 }
 
 interface LayoutProps {
-  children: ReactNode;
+  children?: ReactNode;
 }
 
 export function Layout({ children }: LayoutProps) {
@@ -68,6 +73,12 @@ export function Layout({ children }: LayoutProps) {
       id: "messages",
     },
     {
+      icon: <IconNotes size={rem(18)} />,
+      color: "green",
+      label: "Bulletin Board",
+      id: "bulletin",
+    },
+    {
       icon: <IconKey size={rem(18)} />,
       color: "violet",
       label: "Key Management",
@@ -78,6 +89,21 @@ export function Layout({ children }: LayoutProps) {
   const handleLogout = () => {
     gpg.clearSavedKey();
     window.location.reload();
+  };
+
+  const renderContent = () => {
+    switch (activeLink) {
+      case "users":
+        return <UserList />;
+      case "messages":
+        return <Messages />;
+      case "bulletin":
+        return <BulletinBoard />;
+      case "key":
+        return <KeyManagement />;
+      default:
+        return <UserList />;
+    }
   };
 
   return (
@@ -131,7 +157,7 @@ export function Layout({ children }: LayoutProps) {
         </AppShell.Section>
       </AppShell.Navbar>
 
-      <AppShell.Main>{children}</AppShell.Main>
+      <AppShell.Main>{renderContent()}</AppShell.Main>
     </AppShell>
   );
 }
