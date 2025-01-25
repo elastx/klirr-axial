@@ -32,51 +32,57 @@ func CreateMulticastSockets(cfg config.Config) ([]MulticastConnection, error) {
 		return nil, fmt.Errorf("failed to resolve address: %v", err)
 	}
 
+	fmt.Printf("Attempting to bind to all interfaces first (port %d)\n", cfg.MulticastPort)
 	// First try binding to ALL interfaces
 	if conn, err := setupMulticastConn(cfg, nil, addr); err == nil {
+		fmt.Printf("Successfully bound to all interfaces\n")
 		connections = append(connections, MulticastConnection{
 			Conn:    conn,
 			iface:   nil,
 			localIP: "0.0.0.0",
 		})
-	}
+		return connections, nil  // Return early if we successfully bound to all interfaces
+	} else {
+		fmt.Printf("Failed to bind to all interfaces: %v\n", err)
+		// Only try individual interfaces if binding to all interfaces failed
+		for _, iface := range ifaces {
+			if !isUsableInterface(iface) {
+				fmt.Printf("Skipping interface %s (not usable)\n", iface.Name)
+				continue
+			}
 
-	// Try to create a connection for each usable interface
-	for _, iface := range ifaces {
-		if !isUsableInterface(iface) {
-			continue
-		}
+			fmt.Printf("Attempting to bind to interface %s (port %d)\n", iface.Name, cfg.MulticastPort)
+			conn, err := setupMulticastConn(cfg, &iface, addr)
+			if err != nil {
+				fmt.Printf("Warning: failed to setup multicast on interface %s: %v\n", iface.Name, err)
+				continue
+			}
 
-		conn, err := setupMulticastConn(cfg, &iface, addr)
-		if err != nil {
-			fmt.Printf("Warning: failed to setup multicast on interface %s: %v\n", iface.Name, err)
-			continue
-		}
+			// Get the local IP for this interface
+			addrs, err := iface.Addrs()
+			if err != nil {
+				continue
+			}
 
-		// Get the local IP for this interface
-		addrs, err := iface.Addrs()
-		if err != nil {
-			continue
-		}
-
-		var localIP string
-		for _, addr := range addrs {
-			if ipNet, ok := addr.(*net.IPNet); ok {
-				if ip4 := ipNet.IP.To4(); ip4 != nil && !ip4.IsLoopback() {
-					localIP = ip4.String()
-					break
+			var localIP string
+			for _, addr := range addrs {
+				if ipNet, ok := addr.(*net.IPNet); ok {
+					if ip4 := ipNet.IP.To4(); ip4 != nil && !ip4.IsLoopback() {
+						localIP = ip4.String()
+						break
+					}
 				}
 			}
+
+			connections = append(connections, MulticastConnection{
+				Conn:    conn,
+				iface:   &iface,
+				localIP: localIP,
+			})
+
+			fmt.Printf("Successfully joined multicast group on interface %s (IP: %s)\n",
+				iface.Name, localIP)
 		}
-
-		connections = append(connections, MulticastConnection{
-			Conn:    conn,
-			iface:   &iface,
-			localIP: localIP,
-		})
-
-		fmt.Printf("Successfully joined multicast group on interface %s (IP: %s)\n",
-			iface.Name, localIP)
 	}
 
 	if len(connections) == 0 {
@@ -99,16 +105,15 @@ func isBroadcast(ip net.IP) bool {
 
 
 func setupMulticastConn(cfg config.Config, iface *net.Interface, addr *net.UDPAddr) (*net.UDPConn, error) {
-
 	var conn *net.UDPConn
 	var err error
 
 	// Check if we're using broadcast
 	if isBroadcast(addr.IP) {
-		// For broadcast
+		// For broadcast, bind to 0.0.0.0
 		laddr := &net.UDPAddr{
 			IP:   net.IPv4zero,
-			Port: addr.Port,
+			Port: cfg.MulticastPort,
 		}
 		conn, err = net.ListenUDP("udp4", laddr)
 		if err != nil {
@@ -126,6 +131,11 @@ func setupMulticastConn(cfg config.Config, iface *net.Interface, addr *net.UDPAd
 			err := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_BROADCAST, 1)
 			if err != nil {
 				panic(fmt.Errorf("failed to set SO_BROADCAST: %v", err))
+			}
+			// Also set SO_REUSEADDR
+			err = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+			if err != nil {
+				panic(fmt.Errorf("failed to set SO_REUSEADDR: %v", err))
 			}
 		})
 		if err != nil {
@@ -265,21 +275,19 @@ func StartBroadcast(cfg config.Config, hash string, conn *MulticastConnection) {
 	defer ticker.Stop()
 
 	addr := fmt.Sprintf(":%d", cfg.APIPort)
-	localIP := getLocalIP()
-	message := fmt.Sprintf("%s|%s|%s|%s", cfg.NodeID, hash, addr, localIP)
+	message := fmt.Sprintf("%s|%s|%s|%s", cfg.NodeID, hash, addr, conn.localIP)
 
-	// Explicitly specify port 45678 for destination
 	targetAddr := net.UDPAddr{
-		IP:   net.ParseIP(cfg.MulticastAddress),
-		Port: 45678, // Force this specific port
+		IP:   net.IPv4(255, 255, 255, 255),
+		Port: cfg.MulticastPort,
 	}
 
-	fmt.Printf("Starting broadcast to %s:%d\n", targetAddr.IP, targetAddr.Port)
+	fmt.Printf("Starting broadcast from %s to %s:%d\n", conn.localIP, targetAddr.IP, targetAddr.Port)
 
 	for range ticker.C {
 		_, err := conn.Conn.WriteToUDP([]byte(message), &targetAddr)
 		if err != nil {
-			fmt.Printf("Error sending multicast message: %v\n", err)
+			fmt.Printf("Error sending broadcast message: %v\n", err)
 		} else {
 			fmt.Printf("SENT: %s\n", message)
 		}
