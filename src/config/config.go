@@ -25,7 +25,6 @@ func LoadConfig() (Config, error) {
 				MulticastPort:    45678,
 				APIPort:          8080,
 				LogLevel:         "info",
-				DataFile:         "data.yaml",
 				Database: DatabaseConfig{
 					Host:     "localhost",
 					Port:     5432,

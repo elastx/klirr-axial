@@ -14,6 +14,5 @@ type Config struct {
 	MulticastPort    int            `args:"--multicast-port" yaml:"multicast_port" env:"MULTICAST_PORT"`
 	APIPort          int            `args:"--api-port" yaml:"api_port" env:"API_PORT"`
 	LogLevel         string         `args:"--log-level" yaml:"log_level" env:"LOG_LEVEL"`
-	DataFile         string         `args:"--data-file" yaml:"data_file" env:"DATA_FILE"`
 	Database         DatabaseConfig `yaml:"database"`
 }

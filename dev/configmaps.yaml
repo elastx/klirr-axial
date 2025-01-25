@@ -9,24 +9,6 @@ data:
     multicast_port: 9999
     api_port: 8080
     log_level: "info"
-    data_file: "/data/data.yaml"
-  data.yaml: |
-    data:
-      - id: "1"
-        user: "Alice"
-        content: "Welcome to the BBS! Feel free to post your messages here."
-      - id: "2"
-        user: "Bob"
-        content: "Don't forget to check out the latest news and updates in the announcements section."
-      - id: "3"
-        user: "Charlie"
-        content: "Looking for help? Post your questions in the help forum."
-      - id: "4"
-        user: "Diana"
-        content: "Share your favorite recipes in the cooking forum!"
-      - id: "5"
-        user: "Eve"
-        content: "Join the discussion on the latest tech trends in the technology forum."
 
 ---
 apiVersion: v1
@@ -40,15 +22,6 @@ data:
     multicast_port: 9999
     api_port: 8080
     log_level: "info"
-    data_file: "/data/data.yaml"
-  data.yaml: |
-    data:
-      - id: "1"
-        user: "Alice"
-        content: "Welcome to the BBS! Feel free to post your messages here."
-      - id: "2"
-        user: "Bob"
-        content: "Don't forget to check out the latest news and updates in the announcements section."
 
 ---
 apiVersion: v1
@@ -62,12 +35,3 @@ data:
     multicast_port: 9999
     api_port: 8080
     log_level: "info"
-    data_file: "/data/data.yaml"
-  data.yaml: |
-    data:
-      - id: "3"
-        user: "Charlie"
-        content: "Looking for help? Post your questions in the help forum."
-      - id: "4"
-        user: "Diana"
-        content: "Share your favorite recipes in the cooking forum!"
