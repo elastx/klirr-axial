@@ -10,6 +10,7 @@ import {
   Group,
   Paper,
   Tabs,
+  FileButton,
 } from "@mantine/core";
 import { GPGService } from "./services/gpg";
 import { APIService } from "./services/api";
@@ -27,6 +28,28 @@ function App() {
 
   const gpgService = GPGService.getInstance();
   const apiService = APIService.getInstance();
+
+  const handleFileUpload = (file: File | null) => {
+    if (!file) return;
+
+    file
+      .text()
+      .then((text) => {
+        setPrivateKey(text);
+        handleKeyImport(text);
+      })
+      .catch(() => {
+        // Silently fail - the UI will show no changes
+      });
+  };
+
+  // Check for saved key on mount
+  useEffect(() => {
+    if (gpgService.isKeyLoaded()) {
+      setIsKeyLoaded(true);
+      loadData();
+    }
+  }, []);
 
   useEffect(() => {
     if (isKeyLoaded) {
@@ -65,8 +88,8 @@ function App() {
       );
 
       setTopics(topicsArray);
-    } catch (error) {
-      console.error("Failed to load data:", error);
+    } catch {
+      // Failed to load messages - UI will show empty state
     }
   };
 
@@ -84,35 +107,50 @@ function App() {
         } else {
           decrypted[msg.id] = msg.body;
         }
-      } catch (error) {
-        console.error("Failed to decrypt message:", error);
+      } catch {
+        // If decryption fails, show encrypted message
         decrypted[msg.id] = msg.body;
       }
     }
     setDecryptedMessages(decrypted);
   };
 
-  const handleKeyImport = async () => {
+  const handleKeyImport = async (keyText?: string) => {
     try {
-      await gpgService.importPrivateKey(privateKey);
+      await gpgService.importPrivateKey(keyText || privateKey);
       setIsKeyLoaded(true);
-    } catch (error) {
-      console.error("Failed to import key:", error);
+      setPrivateKey("");
+    } catch {
+      // Key import failed - UI state won't change
     }
+  };
+
+  const handleLogout = () => {
+    gpgService.clearSavedKey();
+    setIsKeyLoaded(false);
+    setSelectedTopic(null);
+    setDecryptedMessages({});
+    setTopics([]);
+    setPrivateKey("");
   };
 
   return (
     <MantineProvider>
       <Container size="xl">
         <Box pt="md" pb="md">
-          <Group mb="md">
+          <Group mb="md" justify="space-between">
             <Text fz="xl" fw={700}>
               Axial BBS
             </Text>
             {isKeyLoaded && (
-              <Text fz="sm" c="dimmed">
-                Fingerprint: {gpgService.getCurrentFingerprint()}
-              </Text>
+              <Group>
+                <Text fz="sm" c="dimmed">
+                  Fingerprint: {gpgService.getCurrentFingerprint()}
+                </Text>
+                <Button variant="subtle" color="red" onClick={handleLogout}>
+                  Logout
+                </Button>
+              </Group>
             )}
           </Group>
 
@@ -129,6 +167,21 @@ function App() {
                     <Tabs.Panel value="import" pt="md">
                       <Stack>
                         <Text>Import your GPG private key:</Text>
+                        <Group>
+                          <FileButton
+                            onChange={handleFileUpload}
+                            accept=".key,.asc,.gpg,text/plain"
+                          >
+                            {(props) => (
+                              <Button variant="light" {...props}>
+                                Upload Key File
+                              </Button>
+                            )}
+                          </FileButton>
+                          <Text size="sm" c="dimmed">
+                            or paste below
+                          </Text>
+                        </Group>
                         <Textarea
                           placeholder="Paste your private key here"
                           value={privateKey}
@@ -136,7 +189,9 @@ function App() {
                           minRows={3}
                           autosize
                         />
-                        <Button onClick={handleKeyImport}>Import Key</Button>
+                        <Button onClick={() => handleKeyImport()}>
+                          Import Key
+                        </Button>
                       </Stack>
                     </Tabs.Panel>
 
@@ -144,7 +199,7 @@ function App() {
                       <KeyGeneration
                         onKeyGenerated={(key) => {
                           setPrivateKey(key);
-                          handleKeyImport();
+                          handleKeyImport(key);
                         }}
                       />
                     </Tabs.Panel>

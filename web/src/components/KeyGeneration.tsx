@@ -23,39 +23,20 @@ export function KeyGeneration({ onKeyGenerated }: KeyGenerationProps) {
         await openpgp.generateKey({
           userIDs: [{ name, email }],
           format: "armored",
+          type: "rsa",
+          rsaBits: 4096,
         });
 
-      // Ensure proper armor formatting with exactly one blank line after headers
-      const formatArmoredKey = (key: string) => {
-        // Split into lines
-        const lines = key.split("\n");
-        let headerEnd = -1;
-
-        // Find the end of headers
-        for (let i = 0; i < lines.length; i++) {
-          if (
-            lines[i].startsWith("Version:") ||
-            lines[i].startsWith("Comment:") ||
-            lines[i].startsWith("MessageID:")
-          ) {
-            headerEnd = i;
-          }
-        }
-
-        if (headerEnd !== -1) {
-          // Ensure exactly one blank line after headers
-          const beforeHeaders = lines.slice(0, headerEnd + 1);
-          const afterHeaders = lines
-            .slice(headerEnd + 1)
-            .filter((line) => line !== "");
-          return [...beforeHeaders, "", ...afterHeaders].join("\n");
-        }
-
-        return key;
+      // Normalize the key format
+      const normalizeKey = (key: string) => {
+        return key
+          .replace(/\r\n/g, "\n") // Convert Windows line endings
+          .replace(/\n\n+/g, "\n\n") // Normalize multiple blank lines
+          .trim(); // Remove leading/trailing whitespace
       };
 
-      const privateKey = formatArmoredKey(rawPrivateKey);
-      const publicKey = formatArmoredKey(rawPublicKey);
+      const privateKey = normalizeKey(rawPrivateKey);
+      const publicKey = normalizeKey(rawPublicKey);
 
       // Verify the private key can be read
       const privKeyObj = await openpgp.readPrivateKey({
@@ -63,11 +44,14 @@ export function KeyGeneration({ onKeyGenerated }: KeyGenerationProps) {
       });
       const fingerprint = privKeyObj.getFingerprint();
 
-      setGeneratedKey({
+      console.log("Generated private key:", privateKey);
+
+      const keyPair = {
         privateKey,
         publicKey,
         fingerprint,
-      });
+      };
+      setGeneratedKey(keyPair);
     } catch (error) {
       console.error("Failed to generate key:", error);
     } finally {
@@ -75,9 +59,18 @@ export function KeyGeneration({ onKeyGenerated }: KeyGenerationProps) {
     }
   };
 
-  const handleUseKey = () => {
+  const handleUseKey = async () => {
     if (generatedKey) {
-      onKeyGenerated(generatedKey.privateKey);
+      try {
+        // Verify the key one more time before using it
+        await openpgp.readPrivateKey({
+          armoredKey: generatedKey.privateKey,
+        });
+        console.log("Using key:", generatedKey.privateKey);
+        onKeyGenerated(generatedKey.privateKey);
+      } catch (error) {
+        console.error("Failed to verify key before use:", error);
+      }
     }
   };
 
