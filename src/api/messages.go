@@ -9,9 +9,11 @@ import (
 )
 
 type MessageRequest struct {
-	Topic       string `json:"topic"`
-	Content     string `json:"content"`
-	Fingerprint string `json:"fingerprint"`
+	Topic       string  `json:"topic,omitempty"`
+	Recipient   string  `json:"recipient,omitempty"`
+	Content     string  `json:"content"`
+	Fingerprint string  `json:"fingerprint"`
+	ParentID    *string `json:"parent_id,omitempty"`
 }
 
 func handleGetMessages(w http.ResponseWriter, r *http.Request) {
@@ -43,22 +45,54 @@ func handleCreateMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate required fields
-	if req.Topic == "" || req.Content == "" || req.Fingerprint == "" {
-		http.Error(w, "Topic, content and fingerprint are required", http.StatusBadRequest)
+	if req.Content == "" || req.Fingerprint == "" {
+		http.Error(w, "Content and fingerprint are required", http.StatusBadRequest)
 		return
 	}
 
-	// Verify user exists
-	var user models.User
-	if err := database.DB.Where("fingerprint = ?", req.Fingerprint).First(&user).Error; err != nil {
-		http.Error(w, "User not found", http.StatusNotFound)
+	// Verify sender exists
+	var sender models.User
+	if err := database.DB.Where("fingerprint = ?", req.Fingerprint).First(&sender).Error; err != nil {
+		http.Error(w, "Sender not found", http.StatusNotFound)
 		return
+	}
+
+	messageType := "bulletin"
+	if req.Recipient != "" {
+		messageType = "private"
+		// For private messages, verify recipient exists
+		var recipient models.User
+		if err := database.DB.Where("fingerprint = ?", req.Recipient).First(&recipient).Error; err != nil {
+			http.Error(w, "Recipient not found", http.StatusNotFound)
+			return
+		}
+	} else if req.Topic == "" {
+		http.Error(w, "Either topic or recipient is required", http.StatusBadRequest)
+		return
+	}
+
+	// If ParentID is provided, verify it exists and is a bulletin post
+	if req.ParentID != nil {
+		var parent models.Message
+		if err := database.DB.First(&parent, "message_id = ?", *req.ParentID).Error; err != nil {
+			http.Error(w, "Parent message not found", http.StatusNotFound)
+			return
+		}
+		if parent.Type != "bulletin" {
+			http.Error(w, "Can only reply to bulletin messages", http.StatusBadRequest)
+			return
+		}
+		// Inherit topic from parent
+		req.Topic = parent.Topic
 	}
 
 	message := models.Message{
-		Topic:       req.Topic,
-		Content:     req.Content,
-		Fingerprint: req.Fingerprint,
+		Topic:     req.Topic,
+		Recipient: req.Recipient,
+		Content:   req.Content,
+		Author:    req.Fingerprint,
+		Type:      messageType,
+		ParentID:  req.ParentID,
 	}
 
 	if err := database.DB.Create(&message).Error; err != nil {

@@ -2,31 +2,59 @@ package database
 
 import (
 	"fmt"
-
-	"axial/config"
-	"axial/models"
+	"log"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+
+	"axial/config"
+	"axial/models"
 )
 
 var DB *gorm.DB
 
 // Connect establishes a connection to the database and performs migrations
 func Connect(cfg config.DatabaseConfig) error {
-	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%d sslmode=disable",
-		cfg.Host, cfg.User, cfg.Password, cfg.Name, cfg.Port)
+	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Name)
+
+	// Enable detailed logging for migrations
+	gormConfig := &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Info),
+	}
 
 	var err error
-	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	DB, err = gorm.Open(postgres.Open(dsn), gormConfig)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %v", err)
 	}
 
+	log.Println("Running migrations...")
 	// Run migrations
-	err = DB.AutoMigrate(&models.User{}, &models.Message{})
-	if err != nil {
+	if err := DB.AutoMigrate(&models.User{}, &models.Message{}); err != nil {
 		return fmt.Errorf("failed to run migrations: %v", err)
+	}
+
+	// Debug: Print table schema
+	var tableInfo []struct {
+		ColumnName string `gorm:"column:column_name"`
+		DataType   string `gorm:"column:data_type"`
+		IsNullable string `gorm:"column:is_nullable"`
+	}
+	
+	if err := DB.Raw(`
+		SELECT column_name, data_type, is_nullable 
+		FROM information_schema.columns 
+		WHERE table_name = 'messages'
+		ORDER BY ordinal_position
+	`).Scan(&tableInfo).Error; err != nil {
+		log.Printf("Failed to get table info: %v", err)
+	} else {
+		log.Println("Messages table schema:")
+		for _, col := range tableInfo {
+			log.Printf("  %s (%s, nullable: %s)", col.ColumnName, col.DataType, col.IsNullable)
+		}
 	}
 
 	return nil

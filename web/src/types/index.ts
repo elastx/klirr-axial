@@ -1,9 +1,12 @@
 export interface Message {
   id: number;
-  topic: string;
+  topic?: string;
+  recipient?: string;
   content: string;
   fingerprint: string;
   created_at: string;
+  type: "private" | "bulletin";
+  parent_id?: number;
 }
 
 export interface User {

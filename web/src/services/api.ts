@@ -1,14 +1,17 @@
 import axios from "axios";
 import { Message, User } from "../types";
 import { UserInfo } from "./gpg";
+import { GPGService } from "./gpg";
 
 const API_BASE_URL = "http://localhost:8080/v1";
 
 export class APIService {
   private static instance: APIService;
+  private gpg: GPGService;
 
   private constructor() {
     axios.defaults.baseURL = API_BASE_URL;
+    this.gpg = GPGService.getInstance();
   }
 
   static getInstance(): APIService {
@@ -37,14 +40,98 @@ export class APIService {
     });
   }
 
-  async sendMessage(
-    message: Omit<Message, "id" | "created_at">
+  async sendPrivateMessage(
+    recipientFingerprint: string,
+    content: string
   ): Promise<void> {
-    await axios.post("/messages", message);
+    const currentFingerprint = this.gpg.getCurrentFingerprint();
+    if (!currentFingerprint) {
+      throw new Error("No key loaded");
+    }
+
+    await axios.post("/messages", {
+      recipient: recipientFingerprint,
+      content,
+      fingerprint: currentFingerprint,
+      type: "private",
+    });
+  }
+
+  async sendBulletinPost(
+    topic: string,
+    content: string,
+    parentId?: number
+  ): Promise<void> {
+    const currentFingerprint = this.gpg.getCurrentFingerprint();
+    if (!currentFingerprint) {
+      throw new Error("No key loaded");
+    }
+
+    await axios.post("/messages", {
+      topic,
+      content,
+      fingerprint: currentFingerprint,
+      type: "bulletin",
+      parent_id: parentId,
+    });
   }
 
   async getTopics(): Promise<string[]> {
     const response = await axios.get("/topics");
     return response.data || [];
+  }
+
+  async getConversations(): Promise<
+    {
+      fingerprint: string;
+      messages: Message[];
+    }[]
+  > {
+    const messages = await this.getMessages();
+    const users = await this.getUsers();
+    const currentFingerprint = this.gpg.getCurrentFingerprint();
+
+    if (!currentFingerprint) {
+      throw new Error("No key loaded");
+    }
+
+    // Group messages by sender/recipient
+    const conversations = new Map<string, Message[]>();
+
+    messages.forEach((msg) => {
+      if (msg.type === "private") {
+        // If we're the sender, group by recipient
+        // If we're the recipient, group by sender
+        const key =
+          msg.fingerprint === currentFingerprint
+            ? msg.recipient!
+            : msg.fingerprint;
+        if (!conversations.has(key)) {
+          conversations.set(key, []);
+        }
+        conversations.get(key)?.push(msg);
+      }
+    });
+
+    // Sort messages in each conversation by timestamp
+    return Array.from(conversations.entries()).map(
+      ([fingerprint, messages]) => ({
+        fingerprint,
+        messages: messages.sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        ),
+      })
+    );
+  }
+
+  async getBulletinPosts(): Promise<Message[]> {
+    const messages = await this.getMessages();
+    return messages
+      .filter((msg) => msg.type === "bulletin")
+      .sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
   }
 }

@@ -9,30 +9,35 @@ import {
   Textarea,
 } from "@mantine/core";
 import { IconSend, IconMessage } from "@tabler/icons-react";
-import { useState } from "react";
-import { User } from "../types";
+import { useState, useEffect } from "react";
+import { User, Message } from "../types";
+import { APIService } from "../services/api";
+import { GPGService } from "../services/gpg";
 
 interface Conversation {
   user: User;
-  messages: {
-    id: string;
-    content: string;
-    timestamp: string;
-    isOutgoing: boolean;
-  }[];
+  messages: Message[];
 }
 
 interface NewMessageProps {
   recipient?: User;
   onClose: () => void;
+  onSent?: () => void;
 }
 
-function NewMessage({ recipient, onClose }: NewMessageProps) {
+function NewMessage({ recipient, onClose, onSent }: NewMessageProps) {
   const [message, setMessage] = useState("");
+  const api = APIService.getInstance();
 
   const handleSend = async () => {
-    // TODO: Implement sending message
-    onClose();
+    try {
+      await api.sendPrivateMessage(recipient!.fingerprint, message);
+      setMessage("");
+      onSent?.();
+      onClose();
+    } catch (error) {
+      console.error("Failed to send message:", error);
+    }
   };
 
   return (
@@ -69,29 +74,46 @@ function NewMessage({ recipient, onClose }: NewMessageProps) {
 
 interface ConversationViewProps {
   conversation: Conversation;
+  onBack: () => void;
+  onMessageSent: () => void;
 }
 
-function ConversationView({ conversation }: ConversationViewProps) {
+function ConversationView({
+  conversation,
+  onBack,
+  onMessageSent,
+}: ConversationViewProps) {
   const [reply, setReply] = useState("");
+  const api = APIService.getInstance();
 
   const handleSend = async () => {
-    // TODO: Implement sending reply
-    setReply("");
+    try {
+      await api.sendPrivateMessage(conversation.user.fingerprint, reply);
+      setReply("");
+      onMessageSent();
+    } catch (error) {
+      console.error("Failed to send reply:", error);
+    }
   };
 
   return (
     <Paper p="md" withBorder>
       <Stack>
-        <Group>
-          <Avatar color="blue" radius="xl">
-            {conversation.user.name?.[0] || "?"}
-          </Avatar>
-          <div>
-            <Text fw={500}>{conversation.user.name || "Unknown"}</Text>
-            <Text size="sm" c="dimmed">
-              {conversation.user.email}
-            </Text>
-          </div>
+        <Group justify="space-between">
+          <Group>
+            <Avatar color="blue" radius="xl">
+              {conversation.user.name?.[0] || "?"}
+            </Avatar>
+            <div>
+              <Text fw={500}>{conversation.user.name || "Unknown"}</Text>
+              <Text size="sm" c="dimmed">
+                {conversation.user.email}
+              </Text>
+            </div>
+          </Group>
+          <Button variant="subtle" onClick={onBack}>
+            Back to Messages
+          </Button>
         </Group>
 
         <ScrollArea h={400}>
@@ -101,10 +123,20 @@ function ConversationView({ conversation }: ConversationViewProps) {
                 key={msg.id}
                 p="sm"
                 withBorder
-                bg={msg.isOutgoing ? "var(--mantine-color-dark-6)" : undefined}
+                bg={
+                  msg.fingerprint === conversation.user.fingerprint
+                    ? undefined
+                    : "var(--mantine-color-dark-6)"
+                }
                 style={{
-                  marginLeft: msg.isOutgoing ? "auto" : 0,
-                  marginRight: msg.isOutgoing ? 0 : "auto",
+                  marginLeft:
+                    msg.fingerprint === conversation.user.fingerprint
+                      ? 0
+                      : "auto",
+                  marginRight:
+                    msg.fingerprint === conversation.user.fingerprint
+                      ? "auto"
+                      : 0,
                   maxWidth: "80%",
                 }}
               >
@@ -112,9 +144,13 @@ function ConversationView({ conversation }: ConversationViewProps) {
                 <Text
                   size="xs"
                   c="dimmed"
-                  ta={msg.isOutgoing ? "right" : "left"}
+                  ta={
+                    msg.fingerprint === conversation.user.fingerprint
+                      ? "left"
+                      : "right"
+                  }
                 >
-                  {new Date(msg.timestamp).toLocaleTimeString()}
+                  {new Date(msg.created_at).toLocaleTimeString()}
                 </Text>
               </Paper>
             ))}
@@ -151,9 +187,34 @@ export function Messages({ initialRecipient, onClose }: MessagesProps) {
   const [showNewMessage, setShowNewMessage] = useState(!!initialRecipient);
   const [selectedConversation, setSelectedConversation] =
     useState<Conversation | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const api = APIService.getInstance();
 
-  // TODO: Fetch conversations from API
-  const conversations: Conversation[] = [];
+  const loadConversations = async () => {
+    try {
+      const users = await api.getUsers();
+      const convs = await api.getConversations();
+
+      // Map conversations to users
+      const fullConversations = convs
+        .map((conv) => ({
+          user: users.find((u) => u.fingerprint === conv.fingerprint)!,
+          messages: conv.messages,
+        }))
+        .filter((conv) => conv.user); // Only include conversations where we found the user
+
+      setConversations(fullConversations);
+    } catch (error) {
+      console.error("Failed to load conversations:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadConversations();
+  }, []);
 
   if (showNewMessage) {
     return (
@@ -163,12 +224,27 @@ export function Messages({ initialRecipient, onClose }: MessagesProps) {
           setShowNewMessage(false);
           onClose?.();
         }}
+        onSent={loadConversations}
       />
     );
   }
 
   if (selectedConversation) {
-    return <ConversationView conversation={selectedConversation} />;
+    return (
+      <ConversationView
+        conversation={selectedConversation}
+        onBack={() => setSelectedConversation(null)}
+        onMessageSent={loadConversations}
+      />
+    );
+  }
+
+  if (loading) {
+    return (
+      <Paper p="md" withBorder>
+        <Text>Loading conversations...</Text>
+      </Paper>
+    );
   }
 
   return (
@@ -217,7 +293,7 @@ export function Messages({ initialRecipient, onClose }: MessagesProps) {
                     <Text fw={500}>{conv.user.name || "Unknown"}</Text>
                     <Text size="sm" c="dimmed">
                       {new Date(
-                        conv.messages[0].timestamp
+                        conv.messages[0].created_at
                       ).toLocaleDateString()}
                     </Text>
                   </Group>
