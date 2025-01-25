@@ -6,9 +6,9 @@ import (
 
 	"axial/api"
 	"axial/config"
-	"axial/data"
 	"axial/database"
 	"axial/discovery"
+	"axial/models"
 )
 
 func main() {
@@ -29,23 +29,13 @@ func main() {
 		panic(fmt.Errorf("failed to initialize database: %v", err))
 	}
 
-	dataFile := cfg.DataFile
-	fmt.Printf("Starting node %s with data %s\n", nodeID, dataFile)
-
-	// Load data
-	loadedData, err := data.LoadData(dataFile)
-	if err != nil {
-		panic(err)
-	}
-
-	convertedData := make([]data.DataBlock, len(loadedData))
-	for i, v := range loadedData {
-		convertedData[i] = data.DataBlock(v)
-	}
-	api.SetData(convertedData)
+	fmt.Printf("Starting node %s\n", nodeID)
 
 	// Calculate initial hash
-	hash := data.CalculateHash(loadedData)
+	hash, err := models.GetDatabaseHash(database.DB)
+	if err != nil {
+		panic(fmt.Errorf("failed to calculate database hash: %v", err))
+	}
 	fmt.Printf("Node %s hash: %s\n", nodeID, hash)
 
 	// Create single multicast socket
