@@ -12,7 +12,6 @@ import { IconSend, IconMessage } from "@tabler/icons-react";
 import { useState, useEffect } from "react";
 import { User, Message } from "../types";
 import { APIService } from "../services/api";
-import { GPGService } from "../services/gpg";
 
 interface Conversation {
   user: User;

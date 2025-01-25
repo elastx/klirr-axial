@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Stack, Text, Button, Group, Card } from "@mantine/core";
+import { Stack, Text, Button, Group, Card, Avatar } from "@mantine/core";
 import { APIService } from "../services/api";
 import { GPGService } from "../services/gpg";
 import { User } from "../types";
-import Avatar from "./avatar/Avatar";
+import UserAvatar from "./avatar/UserAvatar";
 
 export function UserList() {
   const [users, setUsers] = useState<User[]>([]);
@@ -65,12 +65,15 @@ export function UserList() {
       <Stack gap="md">
         {users.map((user) => (
           <Card key={user.id} shadow="sm" p="md">
-            <Avatar seed={user.fingerprint} />
-            <Text size="sm" c="dimmed">
-              Fingerprint: {user.fingerprint}
-            </Text>
-            {user.name && <Text>Name: {user.name}</Text>}
-            {user.email && <Text>Email: {user.email}</Text>}
+            <Group>
+              <Avatar size={60}>
+                <UserAvatar seed={user.fingerprint} size={60} />
+              </Avatar>
+              <div>
+                {user.name && <Text>Name: {user.name}</Text>}
+                {user.email && <Text>Email: {user.email}</Text>}
+              </div>
+            </Group>
           </Card>
         ))}
       </Stack>

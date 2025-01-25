@@ -1,6 +1,108 @@
-import { Avatar } from "./types";
+import {
+  AvatarConfiguration,
+  Accessory,
+  Clothing,
+  ClothingGraphic,
+  Eyebrows,
+  Eyes,
+  FacialHair,
+  Mouth,
+  Nose,
+  Skin,
+  Top,
+} from "./types";
 
-const randomHSLFromString = (seed: string): string => {
+export type ColorSpace = {
+  skin: {
+    hueMin: number;
+    hueMax: number;
+    saturationMin: number;
+    saturationMax: number;
+    lightnessMin: number;
+    lightnessMax: number;
+  };
+  hair: {
+    hueMin: number;
+    hueMax: number;
+    saturationMin: number;
+    saturationMax: number;
+    lightnessMin: number;
+    lightnessMax: number;
+  };
+  facialHair: {
+    hueMin: number;
+    hueMax: number;
+    saturationMin: number;
+    saturationMax: number;
+    lightnessMin: number;
+    lightnessMax: number;
+  };
+  clothing: {
+    hueMin: number;
+    hueMax: number;
+    saturationMin: number;
+    saturationMax: number;
+    lightnessMin: number;
+    lightnessMax: number;
+  };
+  accessory: {
+    hueMin: number;
+    hueMax: number;
+    saturationMin: number;
+    saturationMax: number;
+    lightnessMin: number;
+    lightnessMax: number;
+  };
+};
+
+const defaultColorSpace: ColorSpace = {
+  skin: {
+    hueMin: 0,
+    hueMax: 40,
+    saturationMin: 20,
+    saturationMax: 60,
+    lightnessMin: 50,
+    lightnessMax: 80,
+  },
+  hair: {
+    hueMin: 0,
+    hueMax: 360,
+    saturationMin: 35,
+    saturationMax: 85,
+    lightnessMin: 15,
+    lightnessMax: 45,
+  },
+  facialHair: {
+    hueMin: 0,
+    hueMax: 360,
+    saturationMin: 35,
+    saturationMax: 85,
+    lightnessMin: 15,
+    lightnessMax: 45,
+  },
+  clothing: {
+    hueMin: 0,
+    hueMax: 360,
+    saturationMin: 35,
+    saturationMax: 85,
+    lightnessMin: 35,
+    lightnessMax: 65,
+  },
+  accessory: {
+    hueMin: 0,
+    hueMax: 360,
+    saturationMin: 35,
+    saturationMax: 85,
+    lightnessMin: 35,
+    lightnessMax: 65,
+  },
+};
+
+const randomHSLFromString = (
+  seed: string,
+  colorType: keyof ColorSpace,
+  colorSpace: ColorSpace = defaultColorSpace
+): string => {
   // Create a simple hash from the string
   let hash = 0;
   for (let i = 0; i < seed.length; i++) {
@@ -8,10 +110,16 @@ const randomHSLFromString = (seed: string): string => {
     hash = hash & hash; // Convert to 32-bit integer
   }
 
-  // Use the hash to generate HSL values within pleasing ranges
-  const hue = Math.abs(hash) % 360; // 0-360 degrees
-  const saturation = 35 + (Math.abs(hash >> 8) % 50); // 35-85%
-  const lightness = 45 + (Math.abs(hash >> 16) % 20); // 45-65%
+  const space = colorSpace[colorType];
+
+  // Use the hash to generate HSL values within configured ranges
+  const hueRange = space.hueMax - space.hueMin;
+  const satRange = space.saturationMax - space.saturationMin;
+  const lightRange = space.lightnessMax - space.lightnessMin;
+
+  const hue = space.hueMin + (Math.abs(hash) % hueRange);
+  const saturation = space.saturationMin + (Math.abs(hash >> 8) % satRange);
+  const lightness = space.lightnessMin + (Math.abs(hash >> 16) % lightRange);
 
   return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 };
@@ -21,12 +129,12 @@ const randomHSLFromString = (seed: string): string => {
  * @param seed String used to generate deterministic random selection
  * @returns A random value from the string union type T
  */
-function randomFromStringUnion<T extends string>(seed: string): T {
-  // Get array of string literal types from T
-  const values = Object.values(
-    // This trick forces TypeScript to preserve the string literal types
-    {} as { [K in T]: K }
-  );
+function randomFromStringUnion<T extends string>(
+  seed: string,
+  enumType: { [key: string]: string }
+): T {
+  // Get array of enum values
+  const values = Object.values(enumType);
 
   // Use seed to generate deterministic random index
   const index = Math.floor(seededRandom(seed) * values.length);
@@ -49,28 +157,69 @@ function seededRandom(seed: string): number {
   return x - Math.floor(x);
 }
 
-export const randomProperties = (seed: string): Avatar => {
+export const randomProperties = (
+  seed: string,
+  colorSpace?: ColorSpace
+): AvatarConfiguration => {
   return {
-    accessory: randomFromStringUnion<Avatar["accessory"]>(seed + "-accessory"),
-    clothing: randomFromStringUnion<Avatar["clothing"]>(seed + "-clothing"),
-    clothingGraphic: randomFromStringUnion<Avatar["clothingGraphic"]>(
-      seed + "-clothingGraphic"
+    accessory: randomFromStringUnion<AvatarConfiguration["accessory"]>(
+      seed + "-accessory",
+      Accessory
     ),
-    eyebrows: randomFromStringUnion<Avatar["eyebrows"]>(seed + "-eyebrows"),
-    eyes: randomFromStringUnion<Avatar["eyes"]>(seed + "-eyes"),
-    facialHair: randomFromStringUnion<Avatar["facialHair"]>(
-      seed + "-facialHair"
+    clothing: randomFromStringUnion<AvatarConfiguration["clothing"]>(
+      seed + "-clothing",
+      Clothing
     ),
-    mouth: randomFromStringUnion<Avatar["mouth"]>(seed + "-mouth"),
-    nose: randomFromStringUnion<Avatar["nose"]>(seed + "-nose"),
-    skin: randomFromStringUnion<Avatar["skin"]>(seed + "-skin"),
-    top: randomFromStringUnion<Avatar["top"]>(seed + "-top"),
-    skinColor: randomHSLFromString(seed + "-skinColor"),
-    hairColor: randomHSLFromString(seed + "-hairColor"),
-    facialHairColor: randomHSLFromString(seed + "-facialHairColor"),
-    topColor: randomHSLFromString(seed + "-topColor"),
-    clothingColor: randomHSLFromString(seed + "-clothingColor"),
-    graphicColor: randomHSLFromString(seed + "-graphicColor"),
-    accessoryColor: randomHSLFromString(seed + "-accessoryColor"),
+    clothingGraphic: randomFromStringUnion<
+      AvatarConfiguration["clothingGraphic"]
+    >(seed + "-clothingGraphic", ClothingGraphic),
+    eyebrows: randomFromStringUnion<AvatarConfiguration["eyebrows"]>(
+      seed + "-eyebrows",
+      Eyebrows
+    ),
+    eyes: randomFromStringUnion<AvatarConfiguration["eyes"]>(
+      seed + "-eyes",
+      Eyes
+    ),
+    facialHair: randomFromStringUnion<AvatarConfiguration["facialHair"]>(
+      seed + "-facialHair",
+      FacialHair
+    ),
+    mouth: randomFromStringUnion<AvatarConfiguration["mouth"]>(
+      seed + "-mouth",
+      Mouth
+    ),
+    nose: randomFromStringUnion<AvatarConfiguration["nose"]>(
+      seed + "-nose",
+      Nose
+    ),
+    skin: randomFromStringUnion<AvatarConfiguration["skin"]>(
+      seed + "-skin",
+      Skin
+    ),
+    top: randomFromStringUnion<AvatarConfiguration["top"]>(seed + "-top", Top),
+    skinColor: randomHSLFromString(seed + "-skinColor", "skin", colorSpace),
+    hairColor: randomHSLFromString(seed + "-hairColor", "hair", colorSpace),
+    facialHairColor: randomHSLFromString(
+      seed + "-facialHairColor",
+      "facialHair",
+      colorSpace
+    ),
+    topColor: randomHSLFromString(seed + "-topColor", "hair", colorSpace),
+    clothingColor: randomHSLFromString(
+      seed + "-clothingColor",
+      "clothing",
+      colorSpace
+    ),
+    graphicColor: randomHSLFromString(
+      seed + "-graphicColor",
+      "clothing",
+      colorSpace
+    ),
+    accessoryColor: randomHSLFromString(
+      seed + "-accessoryColor",
+      "accessory",
+      colorSpace
+    ),
   };
 };

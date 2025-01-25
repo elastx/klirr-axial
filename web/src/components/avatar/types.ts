@@ -1,4 +1,4 @@
-export type Avatar = {
+export type AvatarConfiguration = {
   accessory: Accessory;
   clothing: Clothing;
   clothingGraphic: ClothingGraphic;

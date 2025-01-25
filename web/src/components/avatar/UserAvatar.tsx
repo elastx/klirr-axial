@@ -1,9 +1,12 @@
-import { Avatar as AvatarType } from "./types";
-import { randomProperties } from "./properties";
+import { AvatarConfiguration } from "./types";
+import { randomProperties, ColorSpace } from "./properties";
 import { paths } from "./paths";
+import { Tooltip } from "@mantine/core";
 
 type AvatarProps = {
   seed: string;
+  colorSpace?: ColorSpace;
+  size?: number;
 };
 
 type PathFunction = (color: string) => JSX.Element;
@@ -23,7 +26,7 @@ type AvatarFunctions = {
   top: TopFunction;
 };
 
-const avatarFunctions = (avatar: AvatarType): AvatarFunctions => {
+const avatarFunctions = (avatar: AvatarConfiguration): AvatarFunctions => {
   let accessory: PathFunction = paths.accessory.none;
   switch (avatar.accessory) {
     case "none":
@@ -385,8 +388,8 @@ const avatarFunctions = (avatar: AvatarType): AvatarFunctions => {
   };
 };
 
-const Avatar: React.FC<AvatarProps> = ({ seed }) => {
-  const avatar = randomProperties(seed);
+const UserAvatar: React.FC<AvatarProps> = ({ seed, colorSpace, size = 80 }) => {
+  const avatar = randomProperties(seed, colorSpace);
 
   const group = (content: JSX.Element, x: number, y: number) => {
     return <g transform={`translate(${x}, ${y})`}>{content}</g>;
@@ -406,45 +409,96 @@ const Avatar: React.FC<AvatarProps> = ({ seed }) => {
     accessories: { x: 69, y: 85 },
   };
 
-  console.log(avatar);
+  const tooltipContent = (
+    <pre style={{ whiteSpace: "pre-wrap", fontSize: "12px" }}>
+      {JSON.stringify(
+        {
+          seed,
+          features: {
+            accessory: avatar.accessory,
+            clothing: avatar.clothing,
+            clothingGraphic: avatar.clothingGraphic,
+            eyebrows: avatar.eyebrows,
+            eyes: avatar.eyes,
+            facialHair: avatar.facialHair,
+            mouth: avatar.mouth,
+            nose: avatar.nose,
+            skin: avatar.skin,
+            top: avatar.top,
+          },
+          colors: {
+            skin: avatar.skinColor,
+            hair: avatar.hairColor,
+            facialHair: avatar.facialHairColor,
+            top: avatar.topColor,
+            clothing: avatar.clothingColor,
+            graphic: avatar.graphicColor,
+            accessory: avatar.accessoryColor,
+          },
+        },
+        null,
+        2
+      )}
+    </pre>
+  );
 
   return (
-    <svg viewBox="0 0 280 280" xmlns="http://www.w3.org/2000/svg">
-      {group(funcs.skin(avatar.skinColor), positions.skin.x, positions.skin.y)}
-      {group(
-        funcs.clothing(avatar.clothingColor, avatar.clothingGraphic),
-        positions.clothing.x,
-        positions.clothing.y
-      )}
-      {group(
-        funcs.mouth(avatar.skinColor),
-        positions.mouth.x,
-        positions.mouth.y
-      )}
-      {group(funcs.nose(avatar.skinColor), positions.nose.x, positions.nose.y)}
-      {group(funcs.eyes(avatar.skinColor), positions.eyes.x, positions.eyes.y)}
-      {group(
-        funcs.eyebrows(avatar.hairColor),
-        positions.eyebrows.x,
-        positions.eyebrows.y
-      )}
-      {group(
-        funcs.top(avatar.topColor, avatar.hairColor),
-        positions.top.x,
-        positions.top.y
-      )}
-      {group(
-        funcs.facialHair(avatar.facialHairColor),
-        positions.facialHair.x,
-        positions.facialHair.y
-      )}
-      {group(
-        funcs.accessory(avatar.accessoryColor),
-        positions.accessories.x,
-        positions.accessories.y
-      )}
-    </svg>
+    <Tooltip label={tooltipContent} multiline position="bottom" w={300}>
+      <div style={{ width: size, height: size }}>
+        <svg
+          viewBox="0 0 280 280"
+          xmlns="http://www.w3.org/2000/svg"
+          style={{ width: "100%", height: "100%" }}
+        >
+          {group(
+            funcs.skin(avatar.skinColor),
+            positions.skin.x,
+            positions.skin.y
+          )}
+          {group(
+            funcs.clothing(avatar.clothingColor, avatar.clothingGraphic),
+            positions.clothing.x,
+            positions.clothing.y
+          )}
+          {group(
+            funcs.mouth(avatar.skinColor),
+            positions.mouth.x,
+            positions.mouth.y
+          )}
+          {group(
+            funcs.nose(avatar.skinColor),
+            positions.nose.x,
+            positions.nose.y
+          )}
+          {group(
+            funcs.eyes(avatar.skinColor),
+            positions.eyes.x,
+            positions.eyes.y
+          )}
+          {group(
+            funcs.eyebrows(avatar.hairColor),
+            positions.eyebrows.x,
+            positions.eyebrows.y
+          )}
+          {group(
+            funcs.top(avatar.topColor, avatar.hairColor),
+            positions.top.x,
+            positions.top.y
+          )}
+          {group(
+            funcs.facialHair(avatar.facialHairColor),
+            positions.facialHair.x,
+            positions.facialHair.y
+          )}
+          {group(
+            funcs.accessory(avatar.accessoryColor),
+            positions.accessories.x,
+            positions.accessories.y
+          )}
+        </svg>
+      </div>
+    </Tooltip>
   );
 };
 
-export default Avatar;
+export default UserAvatar;
