@@ -1,5 +1,6 @@
 import axios from "axios";
 import { Message, User } from "../types";
+import { UserInfo } from "./gpg";
 
 const API_BASE_URL = "http://localhost:8080/v1";
 
@@ -18,38 +19,32 @@ export class APIService {
   }
 
   async getMessages(): Promise<Message[]> {
-    const response = await axios.post("/sync", {
-      nodeID: "web-client",
-      ranges: [], // We'll need to implement proper sync logic
-    });
-    return response.data.messages || [];
+    const response = await axios.get("/messages");
+    return response.data || [];
   }
 
   async getUsers(): Promise<User[]> {
-    const response = await axios.post("/sync", {
-      nodeID: "web-client",
-      ranges: [{ start: null, end: null }], // This range is used for users
+    const response = await axios.get("/users");
+    return response.data || [];
+  }
+
+  async registerUser(userInfo: UserInfo): Promise<void> {
+    await axios.post("/users", {
+      fingerprint: userInfo.fingerprint,
+      public_key: userInfo.publicKey,
+      name: userInfo.name,
+      email: userInfo.email,
     });
-    return response.data.users || [];
   }
 
   async sendMessage(
     message: Omit<Message, "id" | "created_at">
   ): Promise<void> {
-    await axios.put("/sync", message);
+    await axios.post("/messages", message);
   }
 
   async getTopics(): Promise<string[]> {
-    const messages = await this.getMessages();
-    const topics = new Set<string>();
-
-    messages.forEach((msg) => {
-      // If recipient is not a fingerprint (40 hex chars), it's a topic
-      if (!/^[0-9a-f]{40}$/i.test(msg.recipient)) {
-        topics.add(msg.recipient);
-      }
-    });
-
-    return Array.from(topics);
+    const response = await axios.get("/topics");
+    return response.data || [];
   }
 }

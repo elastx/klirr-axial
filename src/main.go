@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"net/http"
 	"os"
 
 	"axial/api"
@@ -50,7 +52,14 @@ func main() {
 		go discovery.StartMulticastListener(cfg, &conn)
 		go discovery.StartBroadcast(cfg, hash, &conn)
 	}
-	go api.StartHTTPServer()
 
-	select {}
+	// Register API routes
+	api.RegisterRoutes()
+
+	// Start server
+	port := 8080
+	fmt.Printf("Server starting on port %d...\n", port)
+	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil); err != nil {
+		log.Fatal("Server failed to start:", err)
+	}
 }

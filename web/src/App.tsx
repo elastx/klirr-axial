@@ -16,6 +16,7 @@ import { GPGService } from "./services/gpg";
 import { APIService } from "./services/api";
 import { Message, Topic } from "./types";
 import { KeyGeneration } from "./components/KeyGeneration";
+import { UserList } from "./components/UserList";
 
 function App() {
   const [privateKey, setPrivateKey] = useState("");
@@ -224,7 +225,7 @@ function App() {
             </Box>
 
             <Box>
-              {selectedTopic && (
+              {selectedTopic ? (
                 <Stack>
                   {topics
                     .find((t) => t.name === selectedTopic)
@@ -237,6 +238,8 @@ function App() {
                       </Paper>
                     ))}
                 </Stack>
+              ) : (
+                isKeyLoaded && <UserList />
               )}
             </Box>
           </Group>

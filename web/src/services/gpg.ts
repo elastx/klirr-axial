@@ -3,6 +3,13 @@ import { KeyPair } from "../types";
 
 const STORAGE_KEY = "axial_gpg_key";
 
+export interface UserInfo {
+  name: string;
+  email: string;
+  fingerprint: string;
+  publicKey: string;
+}
+
 export class GPGService {
   private static instance: GPGService;
   private currentKeyPair: KeyPair | null = null;
@@ -24,6 +31,38 @@ export class GPGService {
       GPGService.instance = new GPGService();
     }
     return GPGService.instance;
+  }
+
+  async getCurrentUserInfo(): Promise<UserInfo | null> {
+    if (!this.currentKeyPair) return null;
+
+    const publicKey = await openpgp.readKey({
+      armoredKey: this.currentKeyPair.publicKey,
+    });
+    const userIds = publicKey.users[0]?.userID;
+    if (!userIds) return null;
+
+    return {
+      name: userIds.name,
+      email: userIds.email,
+      fingerprint: this.currentKeyPair.fingerprint,
+      publicKey: this.currentKeyPair.publicKey,
+    };
+  }
+
+  async extractUserInfo(publicKeyArmored: string): Promise<UserInfo> {
+    const publicKey = await openpgp.readKey({ armoredKey: publicKeyArmored });
+    const userIds = publicKey.users[0]?.userID;
+    if (!userIds) {
+      throw new Error("No user information found in key");
+    }
+
+    return {
+      name: userIds.name,
+      email: userIds.email,
+      fingerprint: publicKey.getFingerprint(),
+      publicKey: publicKeyArmored,
+    };
   }
 
   async importPrivateKey(privateKeyArmored: string): Promise<KeyPair> {
