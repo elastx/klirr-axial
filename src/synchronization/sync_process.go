@@ -151,6 +151,7 @@ func Sync(node models.RemoteNode, hashedPeriods []models.HashedPeriod) ([]models
 func startingSyncRanges() []models.Period {
 
 	earliestStartTime := models.RealizeStart(nil)
+	latestEndTime := models.RealizeEnd(nil)
 
 	periods := []models.Period{}
 	// The current week starting on monday
@@ -158,18 +159,22 @@ func startingSyncRanges() []models.Period {
 	if weekStart.Before(earliestStartTime) {
 		return []models.Period{
 			{
+				Start: &earliestStartTime,
+				End: &latestEndTime,
 			},
 		}
 	}
 	periods = append(periods, models.Period{
 		Start: &weekStart,
+		End: &latestEndTime,
 	})
 
 	// The month before the current week
 	monthStart := weekStart.AddDate(0, -1, 0)
 	if monthStart.Before(earliestStartTime) {
 		periods = append(periods, models.Period{
-			End: &weekStart,
+			Start: &earliestStartTime,
+			End: &monthStart,
 		})
 		return periods
 	}
@@ -183,7 +188,8 @@ func startingSyncRanges() []models.Period {
 	sixMonths := monthStart.AddDate(0, -6, 0)
 	if sixMonths.Before(earliestStartTime) {
 		periods = append(periods, models.Period{
-			End: &monthStart,
+			Start: &earliestStartTime,
+			End: &sixMonths,
 		})
 		return periods
 	}
@@ -196,7 +202,8 @@ func startingSyncRanges() []models.Period {
 	twoYears := sixMonths.AddDate(-2, 0, 0)
 	if twoYears.Before(earliestStartTime) {
 		periods = append(periods, models.Period{
-			End: &sixMonths,
+			Start: &earliestStartTime,
+			End: &twoYears,
 		})
 		return periods
 	}
@@ -207,6 +214,7 @@ func startingSyncRanges() []models.Period {
 
 	// Everything before that
 	periods = append(periods, models.Period{
+		Start: &earliestStartTime,
 		End:   &twoYears,
 	})
 

@@ -15,8 +15,9 @@ func SendMessage(node models.RemoteNode, message models.Message) error {
 		return err
 	}
 
-	fmt.Printf("Sending message to %s: %s\n", node.Address, string(jsonMessage))
-	response, err := http.Post(fmt.Sprintf("http://%s/v1/message", node.Address), "application/json", bytes.NewBuffer(jsonMessage))
+	endpoint := fmt.Sprintf("http://%s/v1/messages", node.Address)
+	fmt.Printf("Sending message to %s: %s\n", endpoint, string(jsonMessage))
+	response, err := http.Post(endpoint, "application/json", bytes.NewBuffer(jsonMessage))
 	if err != nil {
 		return err
 	}
