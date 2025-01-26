@@ -10,9 +10,6 @@ import (
 	"golang.org/x/net/ipv4"
 
 	"axial/config"
-	"axial/database"
-	"axial/models"
-	"axial/synchronization"
 )
 
 // New type to hold our connections
