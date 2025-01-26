@@ -1,15 +1,14 @@
 import {
-  Text,
+  Button,
+  Group,
   Paper,
   Stack,
-  Button,
+  Text,
   TextInput,
   Textarea,
-  Group,
-  Avatar,
 } from "@mantine/core";
-import { IconSend, IconArrowBack, IconMessageReply } from "@tabler/icons-react";
-import { useState, useEffect } from "react";
+import { IconArrowBack, IconMessageReply, IconSend } from "@tabler/icons-react";
+import { useEffect, useState } from "react";
 import { APIService } from "../services/api";
 import { Message } from "../types";
 import UserAvatar from "./avatar/UserAvatar";

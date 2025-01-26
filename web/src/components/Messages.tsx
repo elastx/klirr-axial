@@ -201,7 +201,7 @@ export function Messages({ initialRecipient, onClose }: MessagesProps) {
           user: users.find((u) => u.fingerprint === conv.fingerprint)!,
           messages: conv.messages,
         }))
-        .filter((conv) => conv.user); // Only include conversations where we found the user
+        .filter((conv) => conv.user) as Conversation[]; // Only include conversations where we found the user
 
       setConversations(fullConversations);
     } catch (error) {

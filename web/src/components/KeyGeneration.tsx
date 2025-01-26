@@ -1,21 +1,20 @@
-import { useState, useCallback } from "react";
 import {
-  Paper,
-  Text,
-  Button,
-  Textarea,
-  Stack,
-  Group,
-  Tabs,
-  FileButton,
-  Container,
-  TextInput,
-  SimpleGrid,
-  Center,
   Box,
+  Button,
+  Center,
+  FileButton,
+  Group,
   LoadingOverlay,
+  Paper,
+  SimpleGrid,
+  Stack,
+  Tabs,
+  Text,
+  Textarea,
+  TextInput,
 } from "@mantine/core";
 import { IconRefresh } from "@tabler/icons-react";
+import { useCallback, useState } from "react";
 import { GPGService } from "../services/gpg";
 import UserAvatar from "./avatar/UserAvatar";
 

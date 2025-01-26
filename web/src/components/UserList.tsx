@@ -1,5 +1,5 @@
+import { Button, Card, Group, Stack, Text } from "@mantine/core";
 import { useEffect, useState } from "react";
-import { Stack, Text, Button, Group, Card, Avatar } from "@mantine/core";
 import { APIService } from "../services/api";
 import { GPGService } from "../services/gpg";
 import { User } from "../types";

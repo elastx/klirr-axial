@@ -32,6 +32,7 @@ import { KeyManagement } from "./KeyManagement";
 import { BulletinBoard } from "./BulletinBoard";
 import classes from "./Layout.module.css";
 import AvatarGrid from "./avatar/AvatarGrid";
+import UserAvatar from "./avatar/UserAvatar";
 
 interface MainLinkProps {
   icon: ReactNode;
@@ -128,9 +129,12 @@ export function Layout() {
             <Title order={3}>Axial BBS</Title>
           </Group>
 
-          <Text size="sm" c="dimmed">
-            {gpg.getCurrentFingerprint()?.slice(0, 8)}
-          </Text>
+          <Group gap="xs">
+            <UserAvatar seed={gpg.getCurrentFingerprint() || ""} size={32} />
+            <Text size="sm" c="dimmed">
+              {gpg.getCurrentFingerprint()?.slice(0, 8)}
+            </Text>
+          </Group>
         </Group>
       </AppShell.Header>
 
