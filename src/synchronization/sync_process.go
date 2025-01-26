@@ -27,11 +27,14 @@ func StartSync(node models.RemoteNode) error {
 	}
 	defer models.EndSync()
 
+	
 	periods := startingSyncRanges()
 	hashedPeriods, err := models.GenerateHashRanges(database.DB, periods)
 	if err != nil {
 		return err
 	}
+	
+	fmt.Printf("Synchronizing with %s\n", node.Address)
 
 	messages, err := Sync(node, hashedPeriods)
 	if err != nil {
@@ -50,6 +53,11 @@ func StartSync(node models.RemoteNode) error {
 }
 
 func Sync(node models.RemoteNode, hashedPeriods []models.HashedPeriod) ([]models.Message, error) {
+	if len(hashedPeriods) == 0 {
+		fmt.Printf("No periods to sync with %s\n", node.Address)
+		return []models.Message{}, nil
+	}
+
 	
 	syncRequest := models.SyncRequest{
 		Ranges: hashedPeriods,
@@ -59,6 +67,8 @@ func Sync(node models.RemoteNode, hashedPeriods []models.HashedPeriod) ([]models
 	if err != nil {
 		return []models.Message{}, err
 	}
+
+	fmt.Printf("Sending sync request to %s: %s\n", node.Address, string(jsonRequest))
 
 	response, err := http.Post(fmt.Sprintf("http://%s/v1/sync", node.Address), "application/json", bytes.NewBuffer(jsonRequest))
 	if err != nil {
@@ -72,13 +82,15 @@ func Sync(node models.RemoteNode, hashedPeriods []models.HashedPeriod) ([]models
 		return []models.Message{}, fmt.Errorf("failed to decode sync response: %v", err)
 	}
 
+	fmt.Printf("Received sync response from %s: %+v\n", node.Address, syncResponse)
+
 	if syncResponse.IsBusy {
 		// Wait until another time.
 		return []models.Message{}, nil
 	}
 
 	messagesMissingInRemote := []models.Message{}
-	
+
 	for _, messagesPeriod := range syncResponse.Messages {
 		ourMessages, err := models.GetMessagesByPeriod(database.DB, messagesPeriod.Period)
 		if err != nil {

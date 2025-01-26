@@ -10,6 +10,9 @@ import (
 	"golang.org/x/net/ipv4"
 
 	"axial/config"
+	"axial/database"
+	"axial/models"
+	"axial/synchronization"
 )
 
 // New type to hold our connections
@@ -263,6 +266,36 @@ func StartMulticastListener(cfg config.Config, conn *MulticastConnection) {
 		// Only process messages that look like ours (4 pipe-separated fields)
 		if parts := strings.Split(message, "|"); len(parts) == 4 {
 			fmt.Printf("RECV: %s (from %s)\n", message, src)
+			// axial-mix.local|74d63e48f0e18e7c300904b49457a630ec782c244fb212273742ce1499cd21ef|:8080|0.0.0.0 (from 192.168.1.207:45678)
+			// if !models.IsSyncing() {
+			// 	hash := parts[1]
+			// 	ourHash, err := models.GetDatabaseHash(database.DB)
+			// 	if err != nil {
+			// 		fmt.Printf("Failed to get database hash: %v\n", err)
+			// 		continue
+			// 	}
+
+			// 	if hash != ourHash {
+			// 		fmt.Printf("Mismatching hash from %s: %s != %s\n", src, hash, ourHash)
+			// 		port := parts[2]
+			// 		remoteNode := models.RemoteNode{
+			// 			Hash: hash,
+			// 			Address: fmt.Sprintf("%s%s", src.IP, port),
+			// 		}
+					
+			// 		err := synchronization.StartSync(remoteNode)
+			// 		if err != nil {
+			// 			fmt.Printf("Failed to start sync: %v\n", err)
+			// 		} else {
+			// 			fmt.Printf("Synchronized with %s\n", remoteNode.Address)
+			// 		}
+			// 	} else {
+			// 		fmt.Printf("Matching hash from %s\n", src)
+			// 	}
+			// } else {
+			// 	fmt.Printf("Ignoring ping from %s because we're already syncing\n", src)
+			// }
+
 		} else {
 			// Debug log for non-matching messages
 			fmt.Printf("Ignored non-axial message from %s (len=%d)\n", src, len(message))
