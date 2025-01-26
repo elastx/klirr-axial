@@ -74,10 +74,14 @@ func handleSyncRequest(w http.ResponseWriter, r *http.Request) {
 		for _, theirRange := range req.Ranges {
 			theirStart := models.RealizeStart(theirRange.Start)
 			theirEnd := models.RealizeEnd(theirRange.End)
+			fmt.Printf("Checking period ours: %v to %v, theirs: %v to %v\n", ourStart, ourEnd, theirStart, theirEnd)
 			if ourStart == theirStart && ourEnd == theirEnd && ourRange.Hash != theirRange.Hash {
 				fmt.Printf("Found mismatching hash for range %v to %v (our hash: %s, their hash: %s)\n", 
 					ourStart, ourEnd, ourRange.Hash, theirRange.Hash)
 				mismatchingRanges = append(mismatchingRanges, ourRange)
+			} else {
+				fmt.Printf("No mismatching hash for range %v to %v (our hash: %s, their hash: %s)\n", 
+					ourStart, ourEnd, ourRange.Hash, theirRange.Hash)
 			}
 		}
 	}
