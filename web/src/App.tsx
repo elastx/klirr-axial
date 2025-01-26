@@ -1,7 +1,6 @@
 import { MantineProvider } from "@mantine/core";
 import { GPGService } from "./services/gpg";
 import { KeyGeneration } from "./components/KeyGeneration";
-import { UserList } from "./components/UserList";
 import { Layout } from "./components/Layout";
 import "@mantine/core/styles.css";
 import { BrowserRouter } from "react-router-dom";

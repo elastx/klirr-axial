@@ -58,12 +58,7 @@ function MainLink({ icon, color, label, active, onClick }: MainLinkProps) {
   );
 }
 
-interface LayoutProps {
-  children?: ReactNode;
-}
-
-export function Layout({ children }: LayoutProps) {
-  const theme = useMantineTheme();
+export function Layout() {
   const [opened, setOpened] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
