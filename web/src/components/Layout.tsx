@@ -10,7 +10,6 @@ import {
   AppShell,
   Text,
   Burger,
-  useMantineTheme,
   Group,
   UnstyledButton,
   ThemeIcon,

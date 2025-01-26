@@ -33,6 +33,21 @@ export class GPGService {
     return GPGService.instance;
   }
 
+  async getUserInfo(publicKeyString: string): Promise<UserInfo | null> {
+    const publicKey = await openpgp.readKey({
+      armoredKey: publicKeyString,
+    });
+    const user = publicKey.users[0];
+    if (!user) return null;
+
+    return {
+      name: user.userID?.name || "",
+      email: user.userID?.email || "",
+      fingerprint: publicKey.getFingerprint(),
+      publicKey: publicKey.armor(),
+    };
+  }
+
   async getCurrentUserInfo(): Promise<UserInfo | null> {
     if (!this.currentKeyPair) return null;
 

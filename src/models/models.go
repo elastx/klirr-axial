@@ -15,8 +15,6 @@ type User struct {
 	CreatedAt   time.Time `json:"created_at"`
 	Fingerprint string    `json:"fingerprint" gorm:"uniqueIndex"`
 	PublicKey   string    `json:"public_key"`
-	Name        string    `json:"name"`
-	Email       string    `json:"email"`
 }
 
 // Message represents a message in the system

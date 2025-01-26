@@ -9,6 +9,11 @@ export interface Message {
   parent_id?: number;
 }
 
+export interface StoredUser {
+  fingerprint: string;
+  public_key: string;
+}
+
 export interface User {
   id: number;
   fingerprint: string;

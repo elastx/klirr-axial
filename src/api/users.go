@@ -11,8 +11,6 @@ import (
 type UserRegistration struct {
 	Fingerprint string `json:"fingerprint"`
 	PublicKey   string `json:"public_key"`
-	Name        string `json:"name"`
-	Email       string `json:"email"`
 }
 
 func handleGetUsers(w http.ResponseWriter, r *http.Request) {
@@ -59,8 +57,6 @@ func handleRegisterUser(w http.ResponseWriter, r *http.Request) {
 	user := models.User{
 		Fingerprint: reg.Fingerprint,
 		PublicKey:   reg.PublicKey,
-		Name:        reg.Name,
-		Email:       reg.Email,
 	}
 
 	if err := database.DB.Create(&user).Error; err != nil {

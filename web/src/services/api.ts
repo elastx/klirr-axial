@@ -1,5 +1,5 @@
 import axios from "axios";
-import { Message, User } from "../types";
+import { Message, StoredUser, User } from "../types";
 import { UserInfo } from "./gpg";
 import { GPGService } from "./gpg";
 
@@ -26,7 +26,7 @@ export class APIService {
     return response.data || [];
   }
 
-  async getUsers(): Promise<User[]> {
+  async getUsers(): Promise<StoredUser[]> {
     const response = await axios.get("/users");
     return response.data || [];
   }

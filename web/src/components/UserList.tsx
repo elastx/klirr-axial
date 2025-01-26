@@ -16,15 +16,35 @@ export function UserList() {
   const loadUsers = async () => {
     try {
       const fetchedUsers = await api.getUsers();
-      setUsers(fetchedUsers);
 
-      // Check if current user is registered
       const currentUser = await gpg.getCurrentUserInfo();
       if (currentUser) {
         setIsRegistered(
           fetchedUsers.some((u) => u.fingerprint === currentUser.fingerprint)
         );
       }
+
+      // Convert fetchedUsers to User[] by using gpg.getUserInfo
+      const enrichedUsers = await Promise.all(
+        fetchedUsers.map(async (user) => {
+          const userInfo = await gpg.getUserInfo(user.public_key);
+          if (!userInfo) {
+            return null;
+          }
+          return {
+            id: Math.random(), // Generate random ID since it's not in the stored user
+            fingerprint: user.fingerprint,
+            public_key: user.public_key,
+            name: userInfo.name,
+            email: userInfo.email,
+          };
+        })
+      );
+
+      const validUsers = enrichedUsers.filter(
+        (user): user is User => user !== null
+      );
+      setUsers(validUsers);
     } catch (error) {
       console.error("Failed to load users:", error);
     } finally {
