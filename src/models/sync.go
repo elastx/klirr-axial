@@ -8,6 +8,11 @@ import (
 	"gorm.io/gorm"
 )
 
+type RemoteNode struct {
+	Hash string `json:"hash"`
+	Address string `json:"base_url"`
+}
+
 // SyncState manages the synchronization state
 type SyncState struct {
 	mu        sync.RWMutex
@@ -19,28 +24,65 @@ var (
 	syncState = &SyncState{}
 )
 
-// HashedPeriod represents a time period and its hash
-type HashedPeriod struct {
+type Period struct {
 	Start *time.Time `json:"start,omitempty"`
 	End   *time.Time `json:"end,omitempty"`
+}
+
+func RealizeStart(start *time.Time) time.Time {
+	if start == nil {
+		// Start at 2025-01-01, the release year
+		return time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	}
+	return *start
+}
+
+func RealizeEnd(end *time.Time) time.Time {
+	if end == nil {
+		// End at the current time
+		return time.Now()
+	}
+	return *end
+}
+
+// HashedPeriod represents a time period and its hash
+type HashedPeriod struct {
+	Period
 	Hash  string     `json:"hash"`
 }
 
+type MessagesPeriod struct {
+	Period
+	Messages []Message `json:"messages"`
+}
+
+// type UsersRange struct {
+// 	Start string `json:"start"`
+// 	End   string `json:"end"`
+// }
+
+// type HashedUsersRange struct {
+// 	UsersRange
+// 	Hash  string `json:"hash"`
+// }
+
+// type ListUsersRange struct {
+// 	UsersRange
+// 	Users  []User `json:"users"`
+// }
+
 // SyncRequest represents a request to sync data
 type SyncRequest struct {
-	NodeID string         `json:"node_id"`
-	Hash   string         `json:"hash"`
 	Ranges []HashedPeriod `json:"ranges"`
 }
 
 // SyncResponse can either contain data or more ranges to check
 type SyncResponse struct {
-	NodeID   string         `json:"node_id"`
 	Hash     string         `json:"hash"`
 	IsBusy   bool           `json:"is_busy"`
 	Ranges   []HashedPeriod `json:"ranges,omitempty"`
-	Users    []User         `json:"users,omitempty"`
-	Messages []Message      `json:"messages,omitempty"`
+	Messages []MessagesPeriod `json:"messages,omitempty"`
+	// Users    []User         `json:"users,omitempty"`
 }
 
 // StartSync attempts to start a sync operation
@@ -84,106 +126,33 @@ func GetHash() string {
 	return syncState.hash
 }
 
-// getWeekStart returns the start of the week (Monday) for a given time
-func getWeekStart(t time.Time) time.Time {
-	weekday := t.Weekday()
-	if weekday == time.Sunday {
-		weekday = 7
-	}
-	return t.AddDate(0, 0, -int(weekday-time.Monday)).Truncate(24 * time.Hour)
-}
-
 // GenerateHashRanges creates the standard set of time ranges to check
-func GenerateHashRanges(db *gorm.DB) ([]HashedPeriod, error) {
-	now := time.Now().UTC()
-
-	// Calculate period boundaries
-	thisWeekStart := getWeekStart(now)
-	lastWeekStart := thisWeekStart.AddDate(0, 0, -7)
-	fourWeeksStart := lastWeekStart.AddDate(0, 0, -28)
-	sixMonthsStart := lastWeekStart.AddDate(0, -6, 0)
-
-	// Get users hash
-	usersHash, err := GetUsersHash(db)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get users hash: %v", err)
+func GenerateHashRanges(db *gorm.DB, periods []Period) ([]HashedPeriod, error) {
+	hashedPeriods := []HashedPeriod{}
+	for _, period := range periods {
+		hash, err := GetMessagesHash(db, period.Start, period.End)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get messages hash: %v", err)
+		}
+		hashedPeriods = append(hashedPeriods, HashedPeriod{
+			Period: period,
+			Hash:   hash,
+		})
 	}
 
-	// Get message hashes for each period
-	currentWeekHash, err := GetMessagesHash(db, &thisWeekStart, &now)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get current week hash: %v", err)
-	}
+	return hashedPeriods, nil
 
-	lastWeekHash, err := GetMessagesHash(db, &lastWeekStart, &thisWeekStart)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get last week hash: %v", err)
-	}
-
-	fourWeeksHash, err := GetMessagesHash(db, &fourWeeksStart, &lastWeekStart)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get four weeks hash: %v", err)
-	}
-
-	sixMonthsHash, err := GetMessagesHash(db, &sixMonthsStart, &fourWeeksStart)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get six months hash: %v", err)
-	}
-
-	oldestHash, err := GetMessagesHash(db, nil, &sixMonthsStart)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get oldest messages hash: %v", err)
-	}
-
-	// Create our ranges
-	ranges := []HashedPeriod{
-		// Users (no time range)
-		{Hash: usersHash},
-
-		// Current partial week
-		{
-			Start: &thisWeekStart,
-			End:   &now,
-			Hash:  currentWeekHash,
-		},
-
-		// Previous week
-		{
-			Start: &lastWeekStart,
-			End:   &thisWeekStart,
-			Hash:  lastWeekHash,
-		},
-
-		// Previous four weeks
-		{
-			Start: &fourWeeksStart,
-			End:   &lastWeekStart,
-			Hash:  fourWeeksHash,
-		},
-
-		// Previous six months
-		{
-			Start: &sixMonthsStart,
-			End:   &fourWeeksStart,
-			Hash:  sixMonthsHash,
-		},
-
-		// Everything before six months
-		{
-			End:  &sixMonthsStart,
-			Hash: oldestHash,
-		},
-	}
-
-	return ranges, nil
 }
 
 // SplitTimeRange splits a time range into n equal parts
-func SplitTimeRange(start, end time.Time, n int) []HashedPeriod {
+func SplitTimeRange(period Period, n int) []Period {
+	start := RealizeStart(period.Start)
+	end := RealizeEnd(period.End)
+
 	duration := end.Sub(start)
 	partDuration := duration / time.Duration(n)
 
-	ranges := make([]HashedPeriod, n)
+	ranges := make([]Period, n)
 	for i := 0; i < n; i++ {
 		partStart := start.Add(partDuration * time.Duration(i))
 		partEnd := partStart.Add(partDuration)
@@ -191,11 +160,23 @@ func SplitTimeRange(start, end time.Time, n int) []HashedPeriod {
 			partEnd = end // Ensure we don't miss any time due to rounding
 		}
 
-		ranges[i] = HashedPeriod{
+		ranges[i] = Period{
 			Start: &partStart,
 			End:   &partEnd,
 		}
 	}
 
 	return ranges
+}
+
+func GetMessagesByPeriod(db *gorm.DB, period Period) ([]Message, error) {
+	var messages []Message
+	err := db.Where("created_at >= ? AND created_at < ?", period.Start, period.End).Find(&messages).Error
+	return messages, err
+}
+
+func CountMessagesByPeriod(db *gorm.DB, period Period) int64 {
+	var count int64
+	db.Model(&Message{}).Where("created_at >= ? AND created_at < ?", period.Start, period.End).Count(&count)
+	return count
 }

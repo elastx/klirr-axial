@@ -37,6 +37,9 @@ func RegisterRoutes() {
 	fs := &spaFileSystem{root: http.Dir("src/frontend/dist"), indexes: true}
 	http.Handle("/", http.FileServer(fs))
 
+	http.HandleFunc("/v1/sync", handleSync)
+	http.HandleFunc("/v1/ping", handlePing)
+
 	// User routes
 	http.HandleFunc("/v1/users", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Users endpoint: %s %s", r.Method, r.URL.Path)
