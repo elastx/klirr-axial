@@ -1,5 +1,12 @@
 import { ReactNode, useState } from "react";
 import {
+  useNavigate,
+  useLocation,
+  Navigate,
+  Routes,
+  Route,
+} from "react-router-dom";
+import {
   AppShell,
   Text,
   Burger,
@@ -58,7 +65,8 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const theme = useMantineTheme();
   const [opened, setOpened] = useState(false);
-  const [activeLink, setActiveLink] = useState("users");
+  const navigate = useNavigate();
+  const location = useLocation();
   const gpg = GPGService.getInstance();
 
   const data = [
@@ -67,53 +75,41 @@ export function Layout({ children }: LayoutProps) {
       color: "blue",
       label: "Users",
       id: "users",
+      path: "/users",
     },
     {
       icon: <IconMessages size={rem(18)} />,
       color: "teal",
       label: "Messages",
       id: "messages",
+      path: "/messages",
     },
     {
       icon: <IconNotes size={rem(18)} />,
       color: "green",
       label: "Bulletin Board",
       id: "bulletin",
+      path: "/bulletin",
     },
     {
       icon: <IconKey size={rem(18)} />,
       color: "violet",
       label: "Key Management",
       id: "key",
+      path: "/keys",
     },
     {
       icon: <IconBrandGravatar size={rem(18)} />,
       color: "violet",
       label: "Avatar Color Space",
       id: "avatar",
+      path: "/avatar",
     },
   ];
 
   const handleLogout = () => {
     gpg.clearSavedKey();
     window.location.reload();
-  };
-
-  const renderContent = () => {
-    switch (activeLink) {
-      case "users":
-        return <UserList />;
-      case "messages":
-        return <Messages />;
-      case "bulletin":
-        return <BulletinBoard />;
-      case "key":
-        return <KeyManagement />;
-      case "avatar":
-        return <AvatarGrid />;
-      default:
-        return <UserList />;
-    }
   };
 
   return (
@@ -150,8 +146,8 @@ export function Layout({ children }: LayoutProps) {
             <Box key={link.label} mb="xs">
               <MainLink
                 {...link}
-                active={activeLink === link.id}
-                onClick={() => setActiveLink(link.id)}
+                active={location.pathname === link.path}
+                onClick={() => navigate(link.path)}
               />
             </Box>
           ))}
@@ -167,7 +163,16 @@ export function Layout({ children }: LayoutProps) {
         </AppShell.Section>
       </AppShell.Navbar>
 
-      <AppShell.Main>{renderContent()}</AppShell.Main>
+      <AppShell.Main>
+        <Routes>
+          <Route path="/users" element={<UserList />} />
+          <Route path="/messages" element={<Messages />} />
+          <Route path="/bulletin" element={<BulletinBoard />} />
+          <Route path="/keys" element={<KeyManagement />} />
+          <Route path="/avatar" element={<AvatarGrid />} />
+          <Route path="/" element={<Navigate to="/users" replace />} />
+        </Routes>
+      </AppShell.Main>
     </AppShell>
   );
 }

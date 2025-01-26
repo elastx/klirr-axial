@@ -1,7 +1,7 @@
 import { AvatarConfiguration } from "./types";
 import { randomProperties, ColorSpace } from "./properties";
 import { paths } from "./paths";
-import { Avatar, Tooltip } from "@mantine/core";
+import { Avatar } from "@mantine/core";
 import { defaultColorSpace } from "./defaultColorSpace";
 
 type AvatarProps = {
