@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	maxBatchSize = 1000 // Maximum number of messages to return in one response
-	numRangeSplits = 10 // Number of parts to split a range into when too large
+	maxBatchSize   = 1000 // Maximum number of messages to return in one response
+	numRangeSplits = 10   // Number of parts to split a range into when too large
 )
 
 func handleSync(w http.ResponseWriter, r *http.Request) {
@@ -74,14 +74,19 @@ func handleSyncRequest(w http.ResponseWriter, r *http.Request) {
 		for _, theirRange := range req.Ranges {
 			theirStart := models.RealizeStart(theirRange.Start)
 			theirEnd := models.RealizeEnd(theirRange.End)
-			fmt.Printf("Checking period ours: %v to %v, theirs: %v to %v\n", ourStart, ourEnd, theirStart, theirEnd)
-			if ourStart == theirStart && ourEnd == theirEnd && ourRange.Hash != theirRange.Hash {
-				fmt.Printf("Found mismatching hash for range %v to %v (our hash: %s, their hash: %s)\n", 
+			if ourStart == theirStart && ourEnd == theirEnd {
+				fmt.Printf("Checking period ours: %v to %v, theirs: %v to %v\n", ourStart, ourEnd, theirStart, theirEnd)
+				if ourRange.Hash != theirRange.Hash {
+					fmt.Printf("Found mismatching hash for range %v to %v (our hash: %s, their hash: %s)\n",
+						ourStart, ourEnd, ourRange.Hash, theirRange.Hash)
+					mismatchingRanges = append(mismatchingRanges, ourRange)
+				} else {
+					fmt.Printf("No mismatching hash for range %v to %v (our hash: %s, their hash: %s)\n",
 					ourStart, ourEnd, ourRange.Hash, theirRange.Hash)
-				mismatchingRanges = append(mismatchingRanges, ourRange)
+				}
 			} else {
-				fmt.Printf("No mismatching hash for range %v to %v (our hash: %s, their hash: %s)\n", 
-					ourStart, ourEnd, ourRange.Hash, theirRange.Hash)
+				fmt.Printf("Periods do not match: ours: %v to %v, theirs: %v to %v\n",
+					ourStart, ourEnd, theirStart, theirEnd)
 			}
 		}
 	}
@@ -121,8 +126,8 @@ func handleSyncRequest(w http.ResponseWriter, r *http.Request) {
 	for _, index := range indicesSortedByCount {
 		mismatchingRange := mismatchingRanges[index]
 		// Try to return as many messages as possible
-		if totalPlainMessages + counts[index] < maxBatchSize {
-			fmt.Printf("Getting messages for range %d (count: %d, total so far: %d)\n", 
+		if totalPlainMessages+counts[index] < maxBatchSize {
+			fmt.Printf("Getting messages for range %d (count: %d, total so far: %d)\n",
 				index, counts[index], totalPlainMessages)
 			messages, err := models.GetMessagesByPeriod(database.DB, mismatchingRange.Period)
 			if err != nil {
@@ -132,21 +137,21 @@ func handleSyncRequest(w http.ResponseWriter, r *http.Request) {
 			}
 
 			messagesPeriod := models.MessagesPeriod{
-				Period: mismatchingRange.Period,
+				Period:   mismatchingRange.Period,
 				Messages: messages,
 			}
 			resp.Messages = append(resp.Messages, messagesPeriod)
 			totalPlainMessages += counts[index]
 		} else {
-			fmt.Printf("Range %d too large (%d messages), splitting into smaller ranges\n", 
+			fmt.Printf("Range %d too large (%d messages), splitting into smaller ranges\n",
 				index, counts[index])
 			// All batches that don't fit the plain message limit are returned as more granular
 			// hashed ranges, for drilling down to find the mismatching data.
-			// 
+			//
 			// The following ensures that each split is 1/10 of the size possible to return
 			// in the next step. This is to ensure we get to return actual messages
 			// in the next step instead of further hashed range juggling.
-			splits := int(counts[index]/(maxBatchSize * 10)) + 1
+			splits := int(counts[index]/(maxBatchSize*10)) + 1
 			fmt.Printf("Splitting range into %d parts\n", splits)
 			periods := models.SplitTimeRange(mismatchingRange.Period, splits)
 			for _, period := range periods {
@@ -168,4 +173,3 @@ func handleSyncRequest(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(resp)
 }
-
