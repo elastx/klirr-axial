@@ -103,25 +103,23 @@ const randomHSLFromString = (
   colorType: keyof ColorSpace,
   colorSpace: ColorSpace = defaultColorSpace
 ): string => {
-  // Create a simple hash from the string
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) {
-    hash = (hash << 5) - hash + seed.charCodeAt(i);
-    hash = hash & hash; // Convert to 32-bit integer
-  }
+  // Get three random values between 0-1 using the seed
+  const hueRand = seededRandom(seed + "-hue");
+  const satRand = seededRandom(seed + "-sat");
+  const lightRand = seededRandom(seed + "-light");
 
   const space = colorSpace[colorType];
 
-  // Use the hash to generate HSL values within configured ranges
-  const hueRange = space.hueMax - space.hueMin;
-  const satRange = space.saturationMax - space.saturationMin;
-  const lightRange = space.lightnessMax - space.lightnessMin;
+  // Map the random values between min and max ranges
+  const hue = space.hueMin + hueRand * (space.hueMax - space.hueMin);
+  const saturation =
+    space.saturationMin + satRand * (space.saturationMax - space.saturationMin);
+  const lightness =
+    space.lightnessMin + lightRand * (space.lightnessMax - space.lightnessMin);
 
-  const hue = space.hueMin + (Math.abs(hash) % hueRange);
-  const saturation = space.saturationMin + (Math.abs(hash >> 8) % satRange);
-  const lightness = space.lightnessMin + (Math.abs(hash >> 16) % lightRange);
-
-  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  return `hsl(${Math.round(hue)}, ${Math.round(saturation)}%, ${Math.round(
+    lightness
+  )}%)`;
 };
 
 /**

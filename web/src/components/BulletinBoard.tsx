@@ -89,9 +89,7 @@ function Post({ post, posts, onReply }: PostProps) {
       <Stack gap="xs">
         <Group justify="space-between">
           <Group>
-            <Avatar color="blue" radius="xl" size={50}>
-              <UserAvatar seed={post.fingerprint} size={50} />
-            </Avatar>
+            <UserAvatar seed={post.fingerprint} size={50} />
             <div>
               <Text fw={500}>{post.topic}</Text>
               <Text size="sm" c="dimmed">

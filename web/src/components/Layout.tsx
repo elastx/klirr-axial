@@ -17,6 +17,7 @@ import {
   IconKey,
   IconLogout,
   IconNotes,
+  IconBrandGravatar,
 } from "@tabler/icons-react";
 import { GPGService } from "../services/gpg";
 import { UserList } from "./UserList";
@@ -24,6 +25,7 @@ import { Messages } from "./Messages";
 import { KeyManagement } from "./KeyManagement";
 import { BulletinBoard } from "./BulletinBoard";
 import classes from "./Layout.module.css";
+import AvatarGrid from "./avatar/AvatarGrid";
 
 interface MainLinkProps {
   icon: ReactNode;
@@ -84,6 +86,12 @@ export function Layout({ children }: LayoutProps) {
       label: "Key Management",
       id: "key",
     },
+    {
+      icon: <IconBrandGravatar size={rem(18)} />,
+      color: "violet",
+      label: "Avatar Color Space",
+      id: "avatar",
+    },
   ];
 
   const handleLogout = () => {
@@ -101,6 +109,8 @@ export function Layout({ children }: LayoutProps) {
         return <BulletinBoard />;
       case "key":
         return <KeyManagement />;
+      case "avatar":
+        return <AvatarGrid />;
       default:
         return <UserList />;
     }

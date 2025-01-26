@@ -66,9 +66,7 @@ export function UserList() {
         {users.map((user) => (
           <Card key={user.id} shadow="sm" p="md">
             <Group>
-              <Avatar size={60}>
-                <UserAvatar seed={user.fingerprint} size={60} />
-              </Avatar>
+              <UserAvatar seed={user.fingerprint} size={60} />
               <div>
                 {user.name && <Text>Name: {user.name}</Text>}
                 {user.email && <Text>Email: {user.email}</Text>}
