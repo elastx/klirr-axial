@@ -8,7 +8,7 @@ import (
 	"axial/models"
 )
 
-type MessageRequest struct {
+type CreateMessageRequest struct {
 	Topic       string  `json:"topic,omitempty"`
 	Recipient   string  `json:"recipient,omitempty"`
 	Content     string  `json:"content"`
@@ -38,7 +38,7 @@ func handleCreateMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req MessageRequest
+	var req CreateMessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return

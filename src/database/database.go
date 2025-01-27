@@ -1,9 +1,11 @@
 package database
 
 import (
+	"errors"
 	"fmt"
 	"log"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -13,6 +15,10 @@ import (
 )
 
 var DB *gorm.DB
+
+const (
+	UniqueViolationErr = "23505"
+)
 
 // Connect establishes a connection to the database and performs migrations
 func Connect(cfg config.DatabaseConfig) error {
@@ -59,3 +65,18 @@ func Connect(cfg config.DatabaseConfig) error {
 
 	return nil
 } 
+
+
+
+func GetUserByFingerprint(fingerprint string) (*models.User, error) {
+	var user models.User
+	if err := DB.Where("fingerprint = ?", fingerprint).First(&user).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func IsDuplicateError(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == UniqueViolationErr
+}

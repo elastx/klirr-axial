@@ -6,16 +6,22 @@ import (
 	"fmt"
 	"net/http"
 
+	"axial/api"
 	"axial/models"
 )
 
-func SendMessage(node models.RemoteNode, message models.Message) error {
-	jsonMessage, err := json.Marshal(message)
+func SyncMessages(node models.RemoteNode, message []models.Message) error {
+
+	syncMessagesRequest := api.SyncMessagesRequest{
+		Messages: message,
+	}
+
+	jsonMessage, err := json.Marshal(syncMessagesRequest)
 	if err != nil {
 		return err
 	}
 
-	endpoint := fmt.Sprintf("http://%s/v1/messages", node.Address)
+	endpoint := fmt.Sprintf("http://%s/v1/sync/messages", node.Address)
 	fmt.Printf("Sending message to %s: %s\n", endpoint, string(jsonMessage))
 	response, err := http.Post(endpoint, "application/json", bytes.NewBuffer(jsonMessage))
 	if err != nil {

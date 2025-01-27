@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"axial/database"
@@ -41,15 +42,40 @@ func StartSync(node models.RemoteNode) error {
 		return err
 	}
 
+	// Get the usersMap that sent the messages
+	usersMap := map[string]*models.User{}
 	for _, message := range messages {
-		// Send messages unique to this node to the remote node
-		err := SendMessage(node, message)
+		user, err := database.GetUserByFingerprint(message.Author)
 		if err != nil {
 			return err
 		}
+		usersMap[user.Fingerprint] = user
 	}
 
+	usersList := []models.User{}
+	for _, user := range usersMap {
+		usersList = append(usersList, *user)
+	}
+
+	SyncUsers(node, usersList)
+
+	// Sort messages by creation time
+	SortMessages(messages)
+
+	// Send messages unique to this node to the remote node
+	SyncMessages(node, messages)
+
 	return nil
+}
+
+func SortMessages(messages []models.Message) {
+	for i := 0; i < len(messages); i++ {
+		for j := i + 1; j < len(messages); j++ {
+			if messages[i].CreatedAt.After(messages[j].CreatedAt) {
+				messages[i], messages[j] = messages[j], messages[i]
+			}
+		}
+	}
 }
 
 func Sync(node models.RemoteNode, hashedPeriods []models.HashedPeriod) ([]models.Message, error) {
@@ -99,9 +125,13 @@ func Sync(node models.RemoteNode, hashedPeriods []models.HashedPeriod) ([]models
 
 		for _, message := range messagesPeriod.Messages {
 			if !slices.Contains(ourMessages, message) {
+				fmt.Printf("Inserting message into our database: %+v\n", message)
 				// Insert message into our database
 				if err := database.DB.Create(&message).Error; err != nil {
-					return []models.Message{}, err
+					// Ignore duplicate key errors since those messages were already synced
+					if !strings.Contains(err.Error(), "duplicate key") {
+						return []models.Message{}, err
+					}
 				}
 			}
 		}

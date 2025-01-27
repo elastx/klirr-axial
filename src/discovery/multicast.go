@@ -266,8 +266,8 @@ func StartMulticastListener(cfg config.Config, conn *MulticastConnection) {
 		// Only process messages that look like ours (4 pipe-separated fields)
 		if parts := strings.Split(message, "|"); len(parts) == 4 {
 			fmt.Printf("RECV: %s (from %s)\n", message, src)
-			// axial-mix.local|74d63e48f0e18e7c300904b49457a630ec782c244fb212273742ce1499cd21ef|:8080|0.0.0.0 (from 192.168.1.207:45678)
-			if false && !models.IsSyncing() {
+			// axial.local|74d63e48f0e18e7c300904b49457a630ec782c244fb212273742ce1499cd21ef|:8080|0.0.0.0 (from 192.168.1.207:45678)
+			if !models.IsSyncing() {
 				hash := parts[1]
 				ourHash, err := models.GetDatabaseHash(database.DB)
 				if err != nil {
