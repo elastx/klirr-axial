@@ -24,6 +24,7 @@ dev-clean:
 	@rm -rf src/axial
 
 .PHONY: deps
+deps:
   @echo "Installing dependencies..."
 	@go install github.com/air-verse/air@latest
 
