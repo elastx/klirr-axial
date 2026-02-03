@@ -51,6 +51,11 @@ type MessagesPeriod struct {
 	Messages []Message `json:"messages"`
 }
 
+type BulletinsPeriod struct {
+	Period
+	Bulletins []Bulletin `json:"bulletins"`
+}
+
 type StringRange struct {
 	Start string `json:"start"`
 	End   string `json:"end"`
@@ -113,13 +118,29 @@ func GetHashes() HashSet {
 	return syncState.hashes
 }
 
-// GenerateHashRanges creates the standard set of time ranges to check
-func GenerateHashRanges(db *gorm.DB, periods []Period) ([]HashedPeriod, error) {
+// GetMessagesHashRanges creates the standard set of time ranges to check
+func GetMessagesHashRanges(db *gorm.DB, periods []Period) ([]HashedPeriod, error) {
 	hashedPeriods := []HashedPeriod{}
 	for _, period := range periods {
 		hash, err := GetMessagesHash(db, period.Start, period.End)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get messages hash: %v", err)
+		}
+		hashedPeriods = append(hashedPeriods, HashedPeriod{
+			Period: period,
+			Hash:   hash,
+		})
+	}
+	return hashedPeriods, nil
+}
+
+// GetBulletinsHashRanges creates hashed ranges for bulletins
+func GetBulletinsHashRanges(db *gorm.DB, periods []Period) ([]HashedPeriod, error) {
+	hashedPeriods := []HashedPeriod{}
+	for _, period := range periods {
+		hash, err := GetBulletinsHash(db, period.Start, period.End)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get bulletins hash: %v", err)
 		}
 		hashedPeriods = append(hashedPeriods, HashedPeriod{
 			Period: period,
@@ -179,5 +200,30 @@ func GetMessagesByPeriod(db *gorm.DB, period Period) ([]Message, error) {
 func CountMessagesByPeriod(db *gorm.DB, period Period) int64 {
 	var count int64
 	db.Model(&Message{}).Where("created_at >= ? AND created_at < ?", period.Start, period.End).Count(&count)
+	return count
+}
+
+
+func GetBulletinsByPeriod(db *gorm.DB, period Period) ([]Bulletin, error) {
+	var bulletins []Bulletin
+	err := db.Where("created_at >= ? AND created_at < ?", period.Start, period.End).Find(&bulletins).Error
+	return bulletins, err
+}
+
+func CountBulletinsByPeriod(db *gorm.DB, period Period) int64 {
+	var count int64
+	db.Model(&Bulletin{}).Where("created_at >= ? AND created_at < ?", period.Start, period.End).Count(&count)
+	return count
+}
+
+func GetUsersByFingerprintRange(db *gorm.DB, start, end string) ([]User, error) {
+	var users []User
+	err := db.Where("fingerprint >= ? AND fingerprint < ?", start, end).Order("fingerprint").Find(&users).Error
+	return users, err
+}
+
+func CountUsersByFingerprintRange(db *gorm.DB, start, end string) int64 {
+	var count int64
+	db.Model(&User{}).Where("fingerprint >= ? AND fingerprint < ?", start, end).Count(&count)
 	return count
 }

@@ -69,7 +69,7 @@ func StartSync(node remote.API, hash string) error {
 	defer models.EndSync()
 
 	periods, stringRanges := startingSyncRanges()
-	hashedPeriods, err := models.GenerateHashRanges(models.DB, periods)
+	hashedPeriods, err := models.GetMessagesHashRanges(models.DB, periods)
 	if err != nil {
 		return err
 	}
@@ -142,7 +142,7 @@ func SyncWithRequester(requester SyncRequester, node remote.API, hashedPeriods [
 	}
 
 	syncRequest := api.SyncRequest{
-		Ranges: hashedPeriods,
+		MessageRanges: hashedPeriods,
 	}
 
 	// Let the requester handle the transport (HTTP in prod, in-memory in tests).
@@ -192,7 +192,7 @@ func SyncWithRequester(requester SyncRequester, node remote.API, hashedPeriods [
 		periodsForRemoteHashes = append(periodsForRemoteHashes, hashedPeriod.Period)
 	}
 
-	ourHashes, err := models.GenerateHashRanges(models.DB, periodsForRemoteHashes)
+	ourHashes, err := models.GetMessagesHashRanges(models.DB, periodsForRemoteHashes)
 	if err != nil {
 		return []models.Message{}, fmt.Errorf("failed to generate hash ranges: %v", err)
 	}

@@ -11,18 +11,20 @@ import (
 )
 
 type HashSet struct {
-	Messages string `json:"messages"`
-	Users    string `json:"users"`
-	Files    string `json:"files"`
-	Full     string `json:"full"`
+	Messages  string `json:"messages"`
+	Users     string `json:"users"`
+	Files     string `json:"files"`
+	Bulletins string `json:"bulletins"`
+	Full      string `json:"full"`
 }
 
 var (
 	hashes = HashSet{
-		Messages: "",
-		Users:    "",
-		Files:    "",
-		Full:     "",
+		Messages:  "",
+		Users:     "",
+		Files:     "",
+		Bulletins: "",
+		Full:      "",
 	}
 )
 
@@ -57,6 +59,38 @@ func GetMessagesHash(db *gorm.DB, start, end *time.Time) (string, error) {
 
 	hasher := sha256.New()
 	for _, id := range messageIDs {
+		hasher.Write([]byte(id))
+	}
+
+	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+
+
+// GetBulletinsHash calculates a hash of bulletins just like messages
+// Bulletins have topic, content and parent id where message has content only
+// type CreateBulletin struct {
+// 	Topic string `json:"topic" gorm:"column:topic;not null"`
+// 	Content Crypto `json:"content" gorm:"column:content;not null"`
+// 	ParentID *string `json:"parent_id,omitempty" gorm:"column:parent_id;default:null"`
+// }
+func GetBulletinsHash(db *gorm.DB, start, end *time.Time) (string, error) {
+	query := db.Model(&Bulletin{}).Order("created_at")
+
+	if start != nil {
+		query = query.Where("created_at >= ?", start)
+	}
+	if end != nil {
+		query = query.Where("created_at <= ?", end)
+	}
+
+	var bulletinIDs []string
+	if err := query.Select("id AS combined_id").Pluck("combined_id", &bulletinIDs).Error; err != nil {
+		return "", fmt.Errorf("failed to get bulletin IDs: %v", err)
+	}
+
+	hasher := sha256.New()
+	for _, id := range bulletinIDs {
 		hasher.Write([]byte(id))
 	}
 
@@ -99,6 +133,11 @@ func RefreshHashes(db *gorm.DB) error {
 		return err
 	}
 
+	bulletinsHash, err := GetBulletinsHash(db, nil, nil)
+	if err != nil {
+		return err
+	}
+
 	usersHash, err := GetUsersHash(db)
 	if err != nil {
 		return err
@@ -112,11 +151,13 @@ func RefreshHashes(db *gorm.DB) error {
 	// Combine hashes in a deterministic order
 	hasher := sha256.New()
 	hasher.Write([]byte("messages:" + messagesHash))
+	hasher.Write([]byte("bulletins:" + bulletinsHash))
 	hasher.Write([]byte("users:" + usersHash))
 	hasher.Write([]byte("files:" + filesHash))
 
 	hashes = HashSet{
 		Messages: messagesHash,
+		Bulletins: bulletinsHash,
 		Users:    usersHash,
 		Files:    filesHash,
 		Full:     hex.EncodeToString(hasher.Sum(nil)),

@@ -107,9 +107,9 @@ func TestSyncExchangeSkeleton(t *testing.T) {
     insertMessageRawUnit(t, dbB, models.Crypto("m3-"+randStringUnit(t)))
 
     periods, _ := startingSyncRanges()
-    hashedA, err := models.GenerateHashRanges(dbA, periods)
+    hashedA, err := models.GetMessagesHashRanges(dbA, periods)
     if err != nil { t.Fatalf("hash ranges A: %v", err) }
-    hashedB, err := models.GenerateHashRanges(dbB, periods)
+    hashedB, err := models.GetMessagesHashRanges(dbB, periods)
     if err != nil { t.Fatalf("hash ranges B: %v", err) }
 
     nodeA := remote.API{Address: "nodeA"}

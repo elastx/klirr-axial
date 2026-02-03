@@ -3,7 +3,7 @@ import { Message, StoredUser, User, BulletinPost, hydrateUser } from "../types";
 import { UserInfo } from "./gpg";
 import { GPGService } from "./gpg";
 
-const API_BASE_URL = "http://localhost:8080/v1";
+const API_BASE_URL = "/v1";
 
 export class APIService {
   private static instance: APIService;
