@@ -18,10 +18,14 @@ dev: dev-clean src/axial
 	@echo "Starting PostgreSQL and pgAdmin..."
 	@cd docker && docker compose up -d
 	@echo "Starting application in development mode..."
-	sudo src/axial
+	@cd src && sudo ./axial
 
 dev-clean:
 	@rm -rf src/axial
+
+.PHONY: deps
+  @echo "Installing dependencies..."
+	@go install github.com/air-verse/air@latest
 
 clean:
 	# Clean up other dangling resources
