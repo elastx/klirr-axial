@@ -1,5 +1,5 @@
 import axios from "axios";
-import { Message, StoredUser, User } from "../types";
+import { Message, StoredUser, User, BulletinPost } from "../types";
 import { UserInfo } from "./gpg";
 import { GPGService } from "./gpg";
 
@@ -65,20 +65,17 @@ export class APIService {
   async sendBulletinPost(
     topic: string,
     content: string,
-    signature: string,
     parentId?: number
   ): Promise<void> {
     const currentFingerprint = this.gpg.getCurrentFingerprint();
     if (!currentFingerprint) {
       throw new Error("No key loaded");
     }
+    const armoredContent = await this.gpg.clearSignMessage(content);
 
-    await axios.post("/messages", {
+    await axios.post("/bulletin", {
       topic,
-      content,
-      author: currentFingerprint,
-      signature,
-      type: "bulletin",
+      content: armoredContent,
       parent_id: parentId,
     });
   }
@@ -130,13 +127,12 @@ export class APIService {
     );
   }
 
-  async getBulletinPosts(): Promise<Message[]> {
-    const messages = await this.getMessages();
-    return messages
-      .filter((msg) => msg.type === "bulletin")
-      .sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
+  async getBulletinPosts(): Promise<BulletinPost[]> {
+    const response = await axios.get("/bulletin");
+    const posts: BulletinPost[] = response.data || [];
+    return posts.sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
   }
 }

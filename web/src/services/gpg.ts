@@ -231,6 +231,51 @@ export class GPGService {
     return signed as string;
   }
 
+  async clearSignMessage(message: string): Promise<string> {
+    if (!this.currentKeyPair) {
+      throw new Error("No private key loaded");
+    }
+
+    const privateKey = await openpgp.readPrivateKey({
+      armoredKey: this.currentKeyPair.privateKey,
+    });
+
+    const cleartext = await openpgp.createCleartextMessage({ text: message });
+    const signed = await openpgp.sign({
+      message: cleartext,
+      signingKeys: privateKey,
+      format: "armored",
+    });
+
+    return signed as string;
+  }
+
+  async verifyClearsignedMessage(
+    armoredCleartext: string,
+    signerFingerprint: string
+  ): Promise<boolean> {
+    const apiService = APIService.getInstance();
+    const cleartext = await openpgp.readCleartextMessage({
+      cleartextMessage: armoredCleartext,
+    });
+    const publicKeyArmored = await apiService
+      .getUser(signerFingerprint)
+      .then((user: User) => user.public_key);
+    const verificationKey = await openpgp.readKey({ armoredKey: publicKeyArmored });
+    const result = await openpgp.verify({
+      message: cleartext,
+      verificationKeys: verificationKey,
+    });
+    return result.signatures[0].verified;
+  }
+
+  async extractClearsignedText(armoredCleartext: string): Promise<string> {
+    const cleartext = await openpgp.readCleartextMessage({
+      cleartextMessage: armoredCleartext,
+    });
+    return cleartext.getText();
+  }
+
   async verifyMessageSignature(
     message: string,
     signature: string,

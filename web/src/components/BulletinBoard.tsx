@@ -17,7 +17,7 @@ import {
 } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { APIService } from "../services/api";
-import { Message } from "../types";
+import { BulletinPost } from "../types";
 import UserAvatar from "./avatar/UserAvatar";
 import { AxiosError } from "axios";
 import { GPGService } from "../services/gpg";
@@ -36,24 +36,20 @@ function NewPost({ onSubmit, parentId, initialTopic, onCancel }: NewPostProps) {
   const api = APIService.getInstance();
 
   const handleSubmit = async () => {
-    GPGService.getInstance()
-      .signMessage(content)
-      .then(async (signature) => {
-        return api
-          .sendBulletinPost(topic, content, signature, parentId)
-          .then(() => {
-            setTopic("");
-            setContent("");
-            onSubmit();
-          })
-          .catch((error: AxiosError) => {
-            let errorText = error.message;
-            const serverError = error.response?.data as string;
-            if (serverError) {
-              errorText = serverError;
-            }
-            setErrorMessage(errorText);
-          });
+    api
+      .sendBulletinPost(topic, content, parentId)
+      .then(() => {
+        setTopic("");
+        setContent("");
+        onSubmit();
+      })
+      .catch((error: AxiosError) => {
+        let errorText = error.message;
+        const serverError = error.response?.data as string;
+        if (serverError) {
+          errorText = serverError;
+        }
+        setErrorMessage(errorText);
       });
   };
 
@@ -100,9 +96,9 @@ function NewPost({ onSubmit, parentId, initialTopic, onCancel }: NewPostProps) {
 }
 
 interface PostProps {
-  post: Message;
-  posts: Message[];
-  onReply: (post: Message) => void;
+  post: BulletinPost;
+  posts: BulletinPost[];
+  onReply: (post: BulletinPost) => void;
 }
 
 function Post({ post, posts, onReply }: PostProps) {
@@ -111,13 +107,17 @@ function Post({ post, posts, onReply }: PostProps) {
   const [verificationStatus, setVerificationStatus] = useState<boolean | null>(
     null
   );
+  const [displayText, setDisplayText] = useState<string>("");
 
   useEffect(() => {
-    GPGService.getInstance()
-      .verifyMessageSignature(post.content, post.signature, post.author)
-      .then((verified) => {
-        setVerificationStatus(verified);
-      });
+    const gpg = GPGService.getInstance();
+    Promise.all([
+      gpg.verifyClearsignedMessage(post.content, post.sender),
+      gpg.extractClearsignedText(post.content),
+    ]).then(([verified, text]) => {
+      setVerificationStatus(verified);
+      setDisplayText(text);
+    });
   }, [post]);
 
   return (
@@ -125,7 +125,7 @@ function Post({ post, posts, onReply }: PostProps) {
       <Stack gap="xs">
         <Group justify="space-between">
           <Group>
-            <UserAvatar seed={post.author} size={50} />
+            <UserAvatar seed={post.sender} size={50} />
             <div>
               <Text fw={500}>{post.topic}</Text>
               <Text size="sm" c="dimmed">
@@ -151,7 +151,7 @@ function Post({ post, posts, onReply }: PostProps) {
             </Button>
           </Group>
         </Group>
-        <Text>{post.content}</Text>
+        <Text>{displayText}</Text>
         {replies.length > 0 && (
           <Stack ml={40} mt="sm">
             {replies.map((reply) => (
@@ -170,16 +170,16 @@ function Post({ post, posts, onReply }: PostProps) {
 }
 
 export function BulletinBoard() {
-  const [posts, setPosts] = useState<Message[]>([]);
+  const [posts, setPosts] = useState<BulletinPost[]>([]);
   const [loading, setLoading] = useState(true);
-  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [replyTo, setReplyTo] = useState<BulletinPost | null>(null);
   const [showNewPost, setShowNewPost] = useState(true);
   const api = APIService.getInstance();
 
   const loadPosts = async () => {
     try {
-      const posts = await api.getBulletinPosts();
-      setPosts(posts);
+      const fetchedPosts = await api.getBulletinPosts();
+      setPosts(fetchedPosts);
     } catch (error) {
       console.error("Failed to load posts:", error);
     } finally {
@@ -197,7 +197,7 @@ export function BulletinBoard() {
     await loadPosts();
   };
 
-  const handleReply = (post: Message) => {
+  const handleReply = (post: BulletinPost) => {
     setReplyTo(post);
     setShowNewPost(false);
   };

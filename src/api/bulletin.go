@@ -8,42 +8,40 @@ import (
 	"axial/models"
 )
 
-
-func handleGetMessages(w http.ResponseWriter, r *http.Request) {
+func handleGetBulletin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var messages []models.Message
-	if err := models.DB.Find(&messages).Error; err != nil {
-		http.Error(w, "Failed to fetch messages", http.StatusInternalServerError)
+	var posts []models.Bulletin
+	if err := models.DB.Order("created_at DESC").Find(&posts).Error; err != nil {
+		http.Error(w, "Failed to fetch bulletin posts", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(messages)
+	json.NewEncoder(w).Encode(posts)
 }
 
-func handleCreateMessage(w http.ResponseWriter, r *http.Request) {
+func handleCreateBulletin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var req models.CreateMessage
+	var req models.CreateBulletin
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	message := models.Message{
-		CreateMessage: req,
+	post := models.Bulletin{
+		CreateBulletin: req,
 	}
 
-	if err := models.DB.Create(&message).Error; err != nil {
-		// Validation/analysis errors should be returned to the client
-		log.Printf("Create message failed: %v", err)
+	if err := models.DB.Create(&post).Error; err != nil {
+		log.Printf("Create bulletin failed: %v", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

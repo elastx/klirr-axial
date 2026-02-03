@@ -77,6 +77,19 @@ func RegisterRoutes() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	}))
+
+	// Bulletin routes
+	http.HandleFunc("/v1/bulletin", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("Bulletin endpoint: %s %s", r.Method, r.URL.Path)
+		switch r.Method {
+		case http.MethodGet:
+			handleGetBulletin(w, r)
+		case http.MethodPost:
+			handleCreateBulletin(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
 	
-	log.Printf("Routes registered: / (SPA + static files), /v1/users, /v1/messages, /v1/topics")
+	log.Printf("Routes registered: / (SPA + static files), /v1/users, /v1/messages, /v1/bulletin, /v1/topics")
 } 

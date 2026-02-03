@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"github.com/ProtonMail/gopenpgp/v2/crypto"
 )
 
@@ -14,7 +15,8 @@ func (c* Crypto) Analyze() (Fingerprint, []Fingerprint, bool, bool, error) {
 
 	// Check if it's a valid PGP message
 	message, err := crypto.NewPGPMessageFromArmored(string(*c))
-	if err != nil {
+	if err != nil || message == nil {
+		return sender, recipients, encrypted, signed, fmt.Errorf("invalid PGP message: %w", err)
 	}
 	
 	recipientStrings, _ := message.GetHexEncryptionKeyIDs()

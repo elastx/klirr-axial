@@ -10,7 +10,7 @@ import (
 type CreateBulletin struct {
 	Topic string `json:"topic" gorm:"column:topic;not null"`
 	Content Crypto `json:"content" gorm:"column:content;not null"`
-	ParentID string `json:"parent_id,omitempty" gorm:"column:parent_id;default:null"`
+	ParentID *uint `json:"parent_id,omitempty" gorm:"column:parent_id;default:null"`
 }
 
 type Bulletin struct {

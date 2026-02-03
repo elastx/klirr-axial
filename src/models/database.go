@@ -37,7 +37,7 @@ func InitDB(cfg config.DatabaseConfig) error {
 
 	log.Println("Running migrations...")
 	// Run migrations
-	if err := DB.AutoMigrate(&User{}, &Message{}); err != nil {
+	if err := DB.AutoMigrate(&User{}, &Message{}, &Bulletin{}); err != nil {
 		return fmt.Errorf("failed to run migrations: %v", err)
 	}
 
@@ -51,12 +51,12 @@ func InitDB(cfg config.DatabaseConfig) error {
 	if err := DB.Raw(`
 		SELECT column_name, data_type, is_nullable 
 		FROM information_schema.columns 
-		WHERE table_name = 'messages'
+		WHERE table_name = 'bulletin_board'
 		ORDER BY ordinal_position
 	`).Scan(&tableInfo).Error; err != nil {
 		log.Printf("Failed to get table info: %v", err)
 	} else {
-		log.Println("Messages table schema:")
+		log.Println("Bulletin table schema:")
 		for _, col := range tableInfo {
 			log.Printf("  %s (%s, nullable: %s)", col.ColumnName, col.DataType, col.IsNullable)
 		}
