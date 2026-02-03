@@ -10,8 +10,9 @@ import {
 } from "@mantine/core";
 import { IconSend, IconMessage } from "@tabler/icons-react";
 import { useState, useEffect } from "react";
-import { User, Message } from "../types";
+import { User, Message, StoredUser } from "../types";
 import { APIService } from "../services/api";
+import { UserPicker } from "./UserPicker";
 
 // TODO: Sign or encrypt messages and store the signed or encrypted result in the contents field.
 // Remove the signature field from the model and the API.
@@ -29,11 +30,22 @@ interface NewMessageProps {
 
 function NewMessage({ recipient, onClose, onSent }: NewMessageProps) {
   const [message, setMessage] = useState("");
+  const [selectedRecipient, setSelectedRecipient] = useState<StoredUser | null>(
+    recipient
+      ? {
+          fingerprint: recipient.fingerprint,
+          public_key: recipient.public_key,
+          name: recipient.name,
+          email: recipient.email,
+        }
+      : null,
+  );
   const api = APIService.getInstance();
 
   const handleSend = async () => {
     try {
-      await api.sendPrivateMessage(recipient!.fingerprint, message);
+      if (!selectedRecipient) return;
+      await api.sendPrivateMessage(selectedRecipient.fingerprint, message);
       setMessage("");
       onSent?.();
       onClose();
@@ -49,8 +61,11 @@ function NewMessage({ recipient, onClose, onSent }: NewMessageProps) {
           <Text size="xl" fw={500}>
             New Message
           </Text>
-          <Text c="dimmed">To: {recipient?.name || "Select recipient"}</Text>
         </Group>
+        <UserPicker
+          value={selectedRecipient}
+          onSelect={(u) => setSelectedRecipient(u)}
+        />
         <Textarea
           placeholder="Type your message here"
           minRows={6}
@@ -62,7 +77,7 @@ function NewMessage({ recipient, onClose, onSent }: NewMessageProps) {
             Cancel
           </Button>
           <Button
-            disabled={!message || !recipient}
+            disabled={!message || !selectedRecipient}
             onClick={handleSend}
             leftSection={<IconSend size={16} />}
           >
@@ -126,15 +141,15 @@ function ConversationView({
                 p="sm"
                 withBorder
                 bg={
-                  msg.author === conversation.user.fingerprint
+                  msg.sender === conversation.user.fingerprint
                     ? undefined
                     : "var(--mantine-color-dark-6)"
                 }
                 style={{
                   marginLeft:
-                    msg.author === conversation.user.fingerprint ? 0 : "auto",
+                    msg.sender === conversation.user.fingerprint ? 0 : "auto",
                   marginRight:
-                    msg.author === conversation.user.fingerprint ? "auto" : 0,
+                    msg.sender === conversation.user.fingerprint ? "auto" : 0,
                   maxWidth: "80%",
                 }}
               >
@@ -143,7 +158,7 @@ function ConversationView({
                   size="xs"
                   c="dimmed"
                   ta={
-                    msg.author === conversation.user.fingerprint
+                    msg.sender === conversation.user.fingerprint
                       ? "left"
                       : "right"
                   }

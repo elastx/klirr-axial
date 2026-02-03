@@ -24,7 +24,7 @@ import { GPGService } from "../services/gpg";
 
 interface NewPostProps {
   onSubmit: () => void;
-  parentId?: number;
+  parentId?: string;
   initialTopic?: string;
   onCancel?: () => void;
 }
@@ -105,7 +105,7 @@ function Post({ post, posts, onReply }: PostProps) {
   // Find replies to this post
   const replies = posts.filter((p) => p.parent_id === post.id);
   const [verificationStatus, setVerificationStatus] = useState<boolean | null>(
-    null
+    null,
   );
   const [displayText, setDisplayText] = useState<string>("");
 
@@ -198,6 +198,7 @@ export function BulletinBoard() {
   };
 
   const handleReply = (post: BulletinPost) => {
+    console.log("Replying to post:", post);
     setReplyTo(post);
     setShowNewPost(false);
   };
@@ -225,20 +226,12 @@ export function BulletinBoard() {
       {showNewPost && !replyTo && <NewPost onSubmit={handlePostSubmitted} />}
 
       {replyTo && (
-        <>
-          <Paper p="md" withBorder bg="var(--mantine-color-dark-6)">
-            <Text size="sm" fw={500} mb="xs">
-              Replying to:
-            </Text>
-            <Text>{replyTo.content}</Text>
-          </Paper>
-          <NewPost
-            onSubmit={handlePostSubmitted}
-            parentId={replyTo.id}
-            initialTopic={replyTo.topic}
-            onCancel={() => setReplyTo(null)}
-          />
-        </>
+        <NewPost
+          onSubmit={handlePostSubmitted}
+          parentId={replyTo.id}
+          initialTopic={replyTo.topic}
+          onCancel={() => setReplyTo(null)}
+        />
       )}
 
       <Paper p="md" withBorder>

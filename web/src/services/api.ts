@@ -47,7 +47,7 @@ export class APIService {
 
   async sendPrivateMessage(
     recipientFingerprint: string,
-    content: string
+    content: string,
   ): Promise<void> {
     const currentFingerprint = this.gpg.getCurrentFingerprint();
     if (!currentFingerprint) {
@@ -65,7 +65,7 @@ export class APIService {
   async sendBulletinPost(
     topic: string,
     content: string,
-    parentId?: number
+    parentId?: string,
   ): Promise<void> {
     const currentFingerprint = this.gpg.getCurrentFingerprint();
     if (!currentFingerprint) {
@@ -106,8 +106,10 @@ export class APIService {
       if (msg.type === "private") {
         // If we're the sender, group by recipient
         // If we're the recipient, group by sender
-        const key =
-          msg.author === currentFingerprint ? msg.recipient! : msg.author;
+        const counterpart =
+          msg.sender === currentFingerprint ? msg.recipient : msg.sender;
+        const key = counterpart;
+        if (!key) return;
         if (!conversations.has(key)) {
           conversations.set(key, []);
         }
@@ -121,9 +123,9 @@ export class APIService {
         fingerprint,
         messages: messages.sort(
           (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
         ),
-      })
+      }),
     );
   }
 
@@ -132,7 +134,55 @@ export class APIService {
     const posts: BulletinPost[] = response.data || [];
     return posts.sort(
       (a, b) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
     );
+  }
+
+  // Search users via backend, falling back to client-side filtering
+  async searchUsers(q: string, limit = 20, offset = 0): Promise<StoredUser[]> {
+    try {
+      const response = await axios.get("/users/search", {
+        params: { q, limit, offset },
+      });
+      const data = response.data as { users?: StoredUser[] } | StoredUser[];
+      const users = Array.isArray(data) ? data : data.users || [];
+      return users.slice(0, limit);
+    } catch (err) {
+      // Fallback: filter locally (non-scalable, but acceptable for dev)
+      const all = await this.getUsers();
+      const needle = q.toLowerCase();
+      const filtered = all.filter((u) =>
+        (u.fingerprint || "").toLowerCase().includes(needle),
+      );
+      return filtered.slice(offset, offset + limit);
+    }
+  }
+
+  // Recent users via backend, fallback to conversation counterparts
+  async getRecentUsers(limit = 10): Promise<StoredUser[]> {
+    try {
+      const currentFingerprint = this.gpg.getCurrentFingerprint();
+      const response = await axios.get("/users/recent", {
+        params: { limit },
+        headers: currentFingerprint
+          ? { "X-User-Fingerprint": currentFingerprint }
+          : undefined,
+      });
+      const users: StoredUser[] = response.data || [];
+      return users.slice(0, limit);
+    } catch (err) {
+      const convs = await this.getConversations();
+      const byRecent = convs
+        .sort(
+          (a, b) =>
+            new Date(b.messages[0].created_at).getTime() -
+            new Date(a.messages[0].created_at).getTime(),
+        )
+        .slice(0, limit)
+        .map((c) => c.fingerprint);
+      const users = await this.getUsers();
+      const map = new Map(users.map((u) => [u.fingerprint, u]));
+      return byRecent.map((fp) => map.get(fp)).filter(Boolean) as StoredUser[];
+    }
   }
 }

@@ -34,7 +34,7 @@ func RegisterRoutes() {
 	log.Printf("Current working directory: %s", cwd)
 
 	// Serve frontend files with SPA support
-	fs := &spaFileSystem{root: http.Dir("src/frontend/dist"), indexes: true}
+	fs := &spaFileSystem{root: http.Dir("frontend/dist"), indexes: true}
 	http.Handle("/", http.FileServer(fs))
 
 	http.HandleFunc("/v1/ping", handlePing)
@@ -43,6 +43,24 @@ func RegisterRoutes() {
 	http.HandleFunc("/v1/sync/users", handleSyncUsers)
 
 	// User routes
+	http.HandleFunc("/v1/users/search", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("Users search endpoint: %s %s", r.Method, r.URL.Path)
+		if r.Method == http.MethodGet {
+			handleSearchUsers(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	http.HandleFunc("/v1/users/recent", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("Users recent endpoint: %s %s", r.Method, r.URL.Path)
+		if r.Method == http.MethodGet {
+			handleRecentUsers(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
 	http.HandleFunc("/v1/users/{fingerprint}", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("User endpoint: %s %s", r.Method, r.URL.Path)
 		if r.Method == http.MethodGet {

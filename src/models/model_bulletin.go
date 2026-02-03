@@ -5,12 +5,14 @@ import (
 	"encoding/hex"
 	"fmt"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type CreateBulletin struct {
 	Topic string `json:"topic" gorm:"column:topic;not null"`
 	Content Crypto `json:"content" gorm:"column:content;not null"`
-	ParentID *uint `json:"parent_id,omitempty" gorm:"column:parent_id;default:null"`
+	ParentID *string `json:"parent_id,omitempty" gorm:"column:parent_id;default:null"`
 }
 
 type Bulletin struct {
@@ -41,7 +43,7 @@ func (b *Bulletin) Hash() string {
 	return hex.EncodeToString(hash[:])
 }
 
-func (m *Bulletin) BeforeCreate() error {
+func (m *Bulletin) BeforeCreate(*gorm.DB) error {
 	sender, recipients, encrypted, signed, err := m.Content.Analyze()
 	if err != nil {
 		return err
