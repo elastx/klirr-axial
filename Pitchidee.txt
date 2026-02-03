@@ -1,0 +1,67 @@
+Hej. Vi ska inte prata teknik i dag – vi ska prata om en situation.
+
+Föreställ er att det är en vardag som plötsligt inte är vardag längre.
+Det kan vara en storm, en stor strömstörning, en cyberattack – eller i värsta fall krig. Oavsett anledning händer samma sak: det som “alltid funkar” slutar funka. Mobilnätet går ner. Internet är borta eller opålitligt. Telefonsamtal och vanliga appar hjälper inte.
+
+Och mitt i det fortsätter livet. Människor behöver sin hjälp. Mediciner ska ges. Besök ska göras. Dörrkoder och rutiner måste vara rätt.
+
+Nu kommer Anna in i bilden.
+
+Anna jobbar i hemtjänsten. Hon ska åka ut till Agda.
+I vanliga fall hade Anna kollat i mobilen, ringt kollegan, eller tittat i ett system som kräver internet.
+
+Men i dag funkar inte mobilnätet.
+
+Anna sätter sig i bilen, och i bilen har hon en liten enkel enhet – tänk “en liten dator”, som en Raspberry Pi med en skärm. Det viktiga är inte prylen, utan att den har Axial igång.
+
+Hon trycker på “Agda”.
+
+Där får hon precis det hon behöver för att kunna göra jobbet säkert:
+
+Vilka mediciner Agda ska ha, och vilken mängd.
+Viktiga instruktioner: till exempel “Agda vill ha vatten först”, eller “extra koll på fallrisk”.
+Dörrkod eller hur man kommer in.
+Och ett tydligt “senast uppdaterad av” – alltså vem som lagt in informationen och när.
+Anna kommer fram till Agda. Hon klickar “Jag är på plats”.
+När besöket är klart registrerar hon medicineringen: “given” och tid.
+Hon kan också skriva en kort notis: “Agda åt lite dåligt i dag” eller “behöver mer vätska”.
+
+Och här är det viktiga: även om mobilnätet fortfarande är nere så försvinner inte den informationen. Den sparas lokalt.
+
+Sen händer nästa del av historien.
+
+När Anna senare passerar en annan bil, eller kommer nära en annan Axial‑nod – kanske på kontoret, kanske på ett boende, kanske i en annan bil – då “smittar” informationen vidare. Inte som ett offentligt inlägg på internet, utan som ett kontrollerat utbyte mellan era egna noder.
+
+Till slut når Annas uppdateringar tillbaka till verksamheten via andra Axial‑noder:
+
+Kollegor ser att besöket är gjort.
+Nästa person ser vad som hände, utan att behöva gissa.
+Och om läget är rörigt i flera dagar, så kan man ändå fortsätta arbeta med en gemensam lägesbild som sakta men säkert uppdateras när noderna får kontakt med varandra.
+Det här är kärnan i Axial.
+
+Axial är inte “en pryl” – det är ett program.
+En Axial‑nod kan vara:
+
+en laptop,
+en stationär dator,
+en liten dator i en bil,
+eller något ni redan har.
+Poängen är att man inte ska behöva köpa in ett dyrt nytt system för att börja. Man kan börja smått, i en pilot, och växa.
+
+Och användare/behörigheter då?
+Vi vill att det ska passa verkligheten. Hemtjänsten har redan sin användarhantering, ofta via AD (Active Directory). Vår tanke är enkel: i stället för att uppfinna ett nytt användarregister kan man exportera användare/roller till en CSV-fil och importera i Axial som start. Då kan man säga:
+
+“De här personerna får se de här uppgifterna”
+“De här får uppdatera”
+“De här får bara läsa”
+Det är en pragmatisk väg som funkar för en första version och kan byggas på senare.
+
+lokalt användargränssnitt,
+information som kan signeras (så man ser att den kommer från rätt avsändare),
+och noder som kan hitta varandra och sprida uppdateringar vidare.
+
+Men vi vill visa något viktigt redan nu:
+När kommunikationen svajar ska vården och omsorgen inte behöva stanna.
+Axial är ett sätt att låta samhällets funktioner fortsätta – även när det vanliga inte fungerar.
+
+Och det är därför vi berättar Annas resa till Agda.
