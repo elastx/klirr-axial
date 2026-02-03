@@ -18,3 +18,6 @@
 - Node owner PGP keys used to sign commits
 - Chain of trust settings to auto-upgrade when new versions are found on other nodes
 
+## Files
+- Receiving nodes set limits on file size.
+- UI warns about that limit for files that are over the limit.
