@@ -1,5 +1,5 @@
 import axios from "axios";
-import { Message, StoredUser, User, BulletinPost } from "../types";
+import { Message, StoredUser, User, BulletinPost, hydrateUser } from "../types";
 import { UserInfo } from "./gpg";
 import { GPGService } from "./gpg";
 
@@ -26,14 +26,18 @@ export class APIService {
     return response.data || [];
   }
 
-  async getUsers(): Promise<StoredUser[]> {
-    const response = await axios.get("/users");
-    return response.data || [];
+  async getUsers(): Promise<User[]> {
+    return axios
+      .get("/users")
+      .then((res) => res.data)
+      .then((users: StoredUser[]) => Promise.all(users.map(hydrateUser)));
   }
 
   async getUser(fingerprint: string): Promise<User> {
-    const response = await axios.get(`/users/${fingerprint}`);
-    return response.data;
+    return axios
+      .get(`/users/${fingerprint}`)
+      .then((res) => res.data)
+      .then(hydrateUser);
   }
 
   async registerUser(userInfo: UserInfo): Promise<void> {

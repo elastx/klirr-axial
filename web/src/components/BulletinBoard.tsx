@@ -17,7 +17,7 @@ import {
 } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { APIService } from "../services/api";
-import { BulletinPost } from "../types";
+import { BulletinPost, User } from "../types";
 import UserAvatar from "./avatar/UserAvatar";
 import { AxiosError } from "axios";
 import { GPGService } from "../services/gpg";
@@ -108,15 +108,17 @@ function Post({ post, posts, onReply }: PostProps) {
     null,
   );
   const [displayText, setDisplayText] = useState<string>("");
+  const [sender, setSender] = useState<User | null>(null);
 
   useEffect(() => {
     const gpg = GPGService.getInstance();
     Promise.all([
       gpg.verifyClearsignedMessage(post.content, post.sender),
       gpg.extractClearsignedText(post.content),
-    ]).then(([verified, text]) => {
+    ]).then(([{ verified, user }, text]) => {
       setVerificationStatus(verified);
       setDisplayText(text);
+      setSender(user);
     });
   }, [post]);
 
@@ -125,9 +127,9 @@ function Post({ post, posts, onReply }: PostProps) {
       <Stack gap="xs">
         <Group justify="space-between">
           <Group>
-            <UserAvatar seed={post.sender} size={50} />
+            <UserAvatar seed={sender?.fingerprint || post.sender} size={50} />
             <div>
-              <Text fw={500}>{post.topic}</Text>
+              <Text fw={500}>{sender?.name || post.sender}</Text>
               <Text size="sm" c="dimmed">
                 {new Date(post.created_at).toLocaleString()}
               </Text>

@@ -297,14 +297,14 @@ export class GPGService {
   async verifyClearsignedMessage(
     armoredCleartext: string,
     signerFingerprint: string,
-  ): Promise<boolean> {
+  ): Promise<{ verified: boolean; user: User | null }> {
     const apiService = APIService.getInstance();
     const cleartext = await openpgp.readCleartextMessage({
       cleartextMessage: armoredCleartext,
     });
-    const publicKeyArmored = await apiService
-      .getUser(signerFingerprint)
-      .then((user: User) => user.public_key);
+    const user = await apiService.getUser(signerFingerprint);
+
+    const publicKeyArmored = user.public_key;
     const verificationKey = await openpgp.readKey({
       armoredKey: publicKeyArmored,
     });
@@ -312,7 +312,8 @@ export class GPGService {
       message: cleartext,
       verificationKeys: verificationKey,
     });
-    return result.signatures[0].verified;
+    const verified = await result.signatures[0].verified;
+    return { verified, user };
   }
 
   async extractClearsignedText(armoredCleartext: string): Promise<string> {
