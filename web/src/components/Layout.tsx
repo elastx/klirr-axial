@@ -29,7 +29,7 @@ import {
 import { GPGService } from "../services/gpg";
 import { UserList } from "./UserList";
 import { Messages } from "./Messages";
-import { UserSettings } from "./KeyManagement";
+import { KeyManagement } from "./KeyManagement";
 import { BulletinBoard } from "./BulletinBoard";
 import { FileManager } from "./FileManager";
 import classes from "./Layout.module.css";
@@ -176,7 +176,7 @@ export function Layout() {
           <Route path="/messages" element={<Messages />} />
           <Route path="/bulletin" element={<BulletinBoard />} />
           <Route path="/files" element={<FileManager />} />
-          <Route path="/keys" element={<UserSettings />} />
+          <Route path="/keys" element={<KeyManagement />} />
           <Route path="/avatar" element={<AvatarGrid />} />
           <Route path="/" element={<Navigate to="/users" replace />} />
         </Routes>

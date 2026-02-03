@@ -4,7 +4,7 @@ import { useState } from "react";
 import { GPGService, UserInfo } from "../services/gpg";
 import UserAvatar from "./avatar/UserAvatar";
 
-export function UserSettings() {
+export function KeyManagement() {
   const [currentUser, setCurrentUser] = useState<UserInfo | null>(null);
 
   const gpg = GPGService.getInstance();
@@ -26,7 +26,7 @@ export function UserSettings() {
   return (
     <Paper p="md" withBorder>
       <Text size="xl" fw={500} mb="md">
-        User Settings
+        Key Management
       </Text>
 
       <Group mb="md">
