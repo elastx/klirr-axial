@@ -25,7 +25,7 @@ dev-clean:
 
 .PHONY: deps
 deps:
-  @echo "Installing dependencies..."
+	@echo "Installing dependencies..."
 	@go install github.com/air-verse/air@latest
 
 clean:
