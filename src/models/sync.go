@@ -71,10 +71,17 @@ type HashedUsersRange struct {
 	Hash  string `json:"hash"`
 }
 
-type ListUsersRange struct {
+
+type FilesRange struct {
 	StringRange
-	Users  []User `json:"users"`
+	Files  []File `json:"files"`
 }
+
+type HashedFilesRange struct {
+	StringRange
+	Hash  string `json:"hash"`
+}
+
 
 
 // StartSync attempts to start a sync operation

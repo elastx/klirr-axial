@@ -18,7 +18,8 @@ const (
 type SyncRequest struct {
 	MessageRanges  []models.HashedPeriod `json:"message_ranges"`
 	BulletinRanges []models.HashedPeriod `json:"bulletin_ranges,omitempty"`
-	Users          []models.StringRange  `json:"users"`
+	Users          []models.HashedUsersRange  `json:"users"`
+	Files          []models.HashedFilesRange  `json:"files,omitempty"`
 }
 
 type SyncResponse struct {
@@ -26,10 +27,11 @@ type SyncResponse struct {
 	IsBusy          bool                      `json:"is_busy"`
 	MessageRanges   []models.HashedPeriod     `json:"message_ranges,omitempty"`
 	Messages        []models.MessagesPeriod   `json:"messages,omitempty"`
-	BulletinRanges	[]models.HashedPeriod     `json:"bulletin_ranges,omitempty"`
+	BulletinRanges  []models.HashedPeriod     `json:"bulletin_ranges,omitempty"`
 	Bulletins       []models.BulletinsPeriod  `json:"bulletins,omitempty"`
 	UserRangeHashes []models.HashedUsersRange `json:"user_range_hashes,omitempty"`
 	Users           []models.UsersRange       `json:"users,omitempty"`
+	Files           []models.FilesRange       `json:"files,omitempty"`
 }
 
 func handleSync(w http.ResponseWriter, r *http.Request) {
@@ -238,23 +240,53 @@ func ComputeSyncResponse(db *gorm.DB, req SyncRequest) (SyncResponse, error) {
 	}
 
 	// Users
-	userRangeHashes, err := models.GetUsersHashRanges(db, req.Users)
-	if err != nil {
-		return SyncResponse{}, fmt.Errorf("failed to get user range hashes: %v", err)
+	userRanges := []models.StringRange{}
+	for _, ur := range req.Users {
+		userRanges = append(userRanges, models.StringRange{
+			Start: ur.Start,
+			End:   ur.End,
+		})
 	}
-	resp.UserRangeHashes = userRangeHashes
+	fmt.Printf("Received %d user ranges to check\n", len(userRanges))
 
-	for _, userRange := range req.Users {
-		users, err := models.GetUsersByFingerprintRange(db, userRange.Start, userRange.End)
-		if err != nil {
-			return SyncResponse{}, fmt.Errorf("failed to get users by fingerprint range: %v", err)
+	ourUserRangeHashes, err := models.GetUsersHashRanges(db, userRanges)
+	if err != nil {
+		return SyncResponse{}, fmt.Errorf("failed to generate user range hashes: %v", err)
+	}
+	fmt.Printf("Generated %d user range hashes\n", len(ourUserRangeHashes))
+
+	mismatchingUserRanges := []models.HashedUsersRange{}
+	for _, ourRange := range ourUserRangeHashes {
+		ourStart := ourRange.Start
+		ourEnd := ourRange.End
+		for _, theirRange := range req.Users {
+			theirStart := theirRange.Start
+			theirEnd := theirRange.End
+			if ourStart == theirStart && ourEnd == theirEnd {
+				if ourRange.Hash != theirRange.Hash {
+					fmt.Printf("Found mismatching hash for user range %s to %s (our hash: %s, their hash: %s)\n",
+						ourStart, ourEnd, ourRange.Hash, theirRange.Hash)
+					mismatchingUserRanges = append(mismatchingUserRanges, ourRange)
+				}
+			}
 		}
+	}
+	fmt.Printf("Found %d mismatching user ranges\n", len(mismatchingUserRanges))
+	for _, mismatchingRange := range mismatchingUserRanges {
+		users, err := models.GetUsersByFingerprintRange(db, mismatchingRange.StringRange.Start, mismatchingRange.StringRange.End)
+		if err != nil {
+			return SyncResponse{}, fmt.Errorf("failed to get users: %v", err)
+		}
+
 		usersRange := models.UsersRange{
-			StringRange: userRange,
+			StringRange: mismatchingRange.StringRange,
 			Users:       users,
 		}
 		resp.Users = append(resp.Users, usersRange)
 	}
+
+	// Files
+	// Skipped for now since it's too dissimilar to database stuff.
 
 	return resp, nil
 }

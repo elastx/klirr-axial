@@ -146,7 +146,10 @@ func SyncWithRequester(requester SyncRequester, node remote.API, hashedMessagesP
 	}
 
 	syncRequest := api.SyncRequest{
-		MessageRanges: hashedMessagesPeriods,
+		MessageRanges:  hashedMessagesPeriods,
+		BulletinRanges: hashedBulletinPeriods,
+		Users:          hashedUsers,
+		Files:          []models.HashedFilesRange{},
 	}
 
 	// Let the requester handle the transport (HTTP in prod, in-memory in tests).
