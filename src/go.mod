@@ -1,9 +1,8 @@
 module axial
 
-go 1.23.1
+go 1.25.4
 
 require (
-	github.com/ProtonMail/go-crypto v1.1.4
 	github.com/ProtonMail/gopenpgp/v2 v2.8.2
 	github.com/jackc/pgx/v5 v5.7.2
 	golang.org/x/net v0.34.0
@@ -13,6 +12,7 @@ require (
 )
 
 require (
+	github.com/ProtonMail/go-crypto v1.1.4 // indirect
 	github.com/ProtonMail/go-mime v0.0.0-20230322103455-7d82a3887f2f // indirect
 	github.com/cloudflare/circl v1.3.7 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect

@@ -14,11 +14,14 @@ run: src/axial
 	@echo "Starting application..."
 	@cd src && sudo ./axial || true
 
-dev: src/axial
+dev: dev-clean src/axial
 	@echo "Starting PostgreSQL and pgAdmin..."
 	@cd docker && docker compose up -d
 	@echo "Starting application in development mode..."
 	sudo src/axial
+
+dev-clean:
+	@rm -rf src/axial
 
 clean:
 	# Clean up other dangling resources
