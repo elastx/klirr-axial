@@ -42,6 +42,8 @@ func RegisterRoutes() {
 	http.HandleFunc("/v1/sync/messages", handleSyncMessages)
 	http.HandleFunc("/v1/sync/users", handleSyncUsers)
 	http.HandleFunc("/v1/sync/files", handleSyncFiles)
+	// Bulletin sync route
+	http.HandleFunc("/v1/sync/bulletin", handleSyncBulletin)
 
 	// User routes
 	http.HandleFunc("/v1/users/search", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {

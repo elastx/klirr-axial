@@ -50,6 +50,11 @@ func (e *Endpoint[T, R, _]) Post(data T) (R, *http.Response, error) {
 
 	defer resp.Body.Close()
 
+	// Allow 201/204 with empty body without decoding
+	if resp.StatusCode == http.StatusCreated || resp.StatusCode == http.StatusNoContent {
+		return result, resp, nil
+	}
+
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return result, resp, fmt.Errorf("failed to decode response: %w", err)
 	}

@@ -48,27 +48,47 @@ func (n *API) Sync() Endpoint[api.SyncRequest, api.SyncResponse, interface{}] {
 	}
 }
 
-func (n *API) SyncMessages() Endpoint[[]models.Message, interface{}, interface{}] {
-	return Endpoint[[]models.Message, interface{}, interface{}]{
+func (n *API) SyncMessages() Endpoint[api.SyncMessagesRequest, interface{}, interface{}] {
+	return Endpoint[api.SyncMessagesRequest, interface{}, interface{}]{
 		Node:    n,
 		Version: "v1",
 		Path:    "sync/messages",
+		ValidPostResponse: func(response http.Response) bool {
+			return response.StatusCode == http.StatusCreated
+		},
 	}
 }
 
-func (n *API) SyncUsers() Endpoint[[]models.User, interface{}, interface{}] {
-	return Endpoint[[]models.User, interface{}, interface{}]{
+func (n *API) SyncUsers() Endpoint[api.SyncUsersRequest, interface{}, interface{}] {
+	return Endpoint[api.SyncUsersRequest, interface{}, interface{}]{
 		Node:    n,
 		Version: "v1",
 		Path:    "sync/users",
+		ValidPostResponse: func(response http.Response) bool {
+			return response.StatusCode == http.StatusCreated
+		},
 	}
 }
 
-func (n *API) SyncFiles() Endpoint[[]models.File, interface{}, interface{}] {
-	return Endpoint[[]models.File, interface{}, interface{}]{
+func (n *API) SyncFiles() Endpoint[api.SyncFilesRequest, interface{}, interface{}] {
+	return Endpoint[api.SyncFilesRequest, interface{}, interface{}]{
 		Node:    n,
 		Version: "v1",
 		Path:    "sync/files",
+		ValidPostResponse: func(response http.Response) bool {
+			return response.StatusCode == http.StatusCreated
+		},
+	}
+}
+
+func (n *API) SyncBulletin() Endpoint[api.SyncBulletinRequest, interface{}, interface{}] {
+	return Endpoint[api.SyncBulletinRequest, interface{}, interface{}]{
+		Node:    n,
+		Version: "v1",
+		Path:    "sync/bulletin",
+		ValidPostResponse: func(response http.Response) bool {
+			return response.StatusCode == http.StatusCreated
+		},
 	}
 }
 

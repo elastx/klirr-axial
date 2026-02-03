@@ -3,13 +3,14 @@ package synchronization
 import (
 	"fmt"
 
+	"axial/api"
 	"axial/models"
 	"axial/remote"
 )
 
 func SyncMessages(node remote.API, message []models.Message) error {
 	endpoint := node.SyncMessages()
-	responseData, response, err := endpoint.Post(message)
+	responseData, response, err := endpoint.Post(api.SyncMessagesRequest{Messages: message})
 	if err != nil {
 		return err
 	}

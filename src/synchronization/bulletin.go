@@ -8,9 +8,9 @@ import (
 	"axial/remote"
 )
 
-func SyncUsers(node remote.API, users []models.User) error {
-	endpoint := node.SyncUsers()
-	responseData, response, err := endpoint.Post(api.SyncUsersRequest{Users: users})
+func SyncBulletin(node remote.API, posts []models.Bulletin) error {
+	endpoint := node.SyncBulletin()
+	responseData, response, err := endpoint.Post(api.SyncBulletinRequest{Posts: posts})
 	if err != nil {
 		return err
 	}

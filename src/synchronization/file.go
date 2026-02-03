@@ -1,6 +1,7 @@
 package synchronization
 
 import (
+	"axial/api"
 	"axial/models"
 	"axial/remote"
 	"fmt"
@@ -14,7 +15,7 @@ import (
 // SyncFiles synchronizes file metadata with a remote node
 func SyncFiles(node remote.API, files []models.File) error {
 	endpoint := node.SyncFiles()
-	responseData, response, err := endpoint.Post(files)
+	responseData, response, err := endpoint.Post(api.SyncFilesRequest{Files: files})
 	if err != nil {
 		return err
 	}

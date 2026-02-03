@@ -46,28 +46,34 @@ func StartSync(node remote.API, hash string) error {
 		return err
 	}
 
-	// Get the usersMap that sent the messages
-	usersMap := map[string]*models.User{}
-	for _, message := range messages {
-		user, err := models.GetUserByFingerprint(message.Sender)
-		if err != nil {
+	// Sync all users, not just senders
+	allUsers := []models.User{}
+	if err := models.DB.Find(&allUsers).Error; err != nil {
+		return err
+	}
+	if len(allUsers) > 0 {
+		if err := SyncUsers(node, allUsers); err != nil {
 			return err
 		}
-		usersMap[string(user.Fingerprint)] = user
 	}
-	if len(usersMap) == 0 {
-		usersList := []models.User{}
-		for _, user := range usersMap {
-			usersList = append(usersList, *user)
-		}
 
-		SyncUsers(node, usersList)
-
-		// Sort messages by creation time
+	// Sort and sync messages unique to this node to the remote
+	if len(messages) > 0 {
 		SortMessages(messages)
+		if err := SyncMessages(node, messages); err != nil {
+			return err
+		}
+	}
 
-		// Send messages unique to this node to the remote node
-		SyncMessages(node, messages)
+	// Sync bulletin board items
+	bulletins := []models.Bulletin{}
+	if err := models.DB.Find(&bulletins).Error; err != nil {
+		return err
+	}
+	if len(bulletins) > 0 {
+		if err := SyncBulletin(node, bulletins); err != nil {
+			return err
+		}
 	}
 
 	return nil
