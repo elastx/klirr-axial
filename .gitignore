@@ -12,3 +12,6 @@ src/axial
 
 # Frontend build files
 src/frontend/dist/
+
+# Files
+src/data/
