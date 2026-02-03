@@ -28,6 +28,9 @@ jobs:
           go-version-file: src/go.mod
           cache: true
 
+      - name: Add frontend dependencies to Go module
+        run: make src/frontend/dist
+
       - name: Run Go tests with coverage
         id: cover
         working-directory: src
