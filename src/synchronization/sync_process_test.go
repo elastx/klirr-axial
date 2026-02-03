@@ -62,6 +62,15 @@ func insertBulletinRawUnit(t *testing.T, db *gorm.DB, topic string, content mode
     return b
 }
 
+func insertUserRawUnit(t *testing.T, db *gorm.DB, fingerprint string) models.User {
+    t.Helper()
+    u := models.User{Fingerprint: fingerprint}
+    if err := db.Session(&gorm.Session{SkipHooks: true}).Create(&u).Error; err != nil {
+        t.Fatalf("create user: %v", err)
+    }
+    return u
+}
+
 func randStringUnit(t *testing.T) string {
     t.Helper()
     buf := make([]byte, 8)
@@ -122,6 +131,12 @@ func TestSyncExchangeSkeleton(t *testing.T) {
     b2 := insertBulletinRawUnit(t, dbA, "topic2", models.Crypto("b2-"+randStringUnit(t)), "")
     insertBulletinRawUnit(t, dbB, "topic2", models.Crypto(string(b2.Content)), b2.Base.ID)
     insertBulletinRawUnit(t, dbB, "topic3", models.Crypto("b3-"+randStringUnit(t)), "")
+
+    // Seed user profiles (synthetic fingerprints, skip hooks)
+    insertUserRawUnit(t, dbA, "FP_A1_"+randStringUnit(t))
+    insertUserRawUnit(t, dbA, "FP_A2_"+randStringUnit(t))
+    insertUserRawUnit(t, dbB, "FP_A2_"+randStringUnit(t)) // share FP_A2 on B
+    insertUserRawUnit(t, dbB, "FP_B3_"+randStringUnit(t))
 
     periods, _ := startingSyncRanges()
     hashedMessagesA, err := models.GetMessagesHashRanges(dbA, periods)
@@ -186,7 +201,7 @@ func TestSyncExchangeSkeleton(t *testing.T) {
         }
     }
 
-    // Final checks: both DBs should have all 3 messages
+    // both DBs should have all 3 messages
     var countA int64
     if err := dbA.Model(&models.Message{}).Count(&countA).Error; err != nil {
         t.Fatalf("count messages A: %v", err)
@@ -201,5 +216,39 @@ func TestSyncExchangeSkeleton(t *testing.T) {
     }
     if countB != 3 {
         t.Fatalf("expected 3 messages in B, got %d", countB)
+    }
+
+    // both DBs should have all 3 bulletins
+    var bcountA int64
+    if err := dbA.Model(&models.Bulletin{}).Count(&bcountA).Error; err != nil {
+        t.Fatalf("count bulletins A: %v", err)
+    }
+    if bcountA != 3 {
+        t.Fatalf("expected 3 bulletins in A, got %d", bcountA)
+    }
+
+    var bcountB int64
+    if err := dbB.Model(&models.Bulletin{}).Count(&bcountB).Error; err != nil {
+        t.Fatalf("count bulletins B: %v", err)
+    }
+    if bcountB != 3 {
+        t.Fatalf("expected 3 bulletins in B, got %d", bcountB)
+    }
+
+    // both DBs should have all 3 users
+    var ucountA int64
+    if err := dbA.Model(&models.User{}).Count(&ucountA).Error; err != nil {
+        t.Fatalf("count users A: %v", err)
+    }
+    if ucountA != 3 {
+        t.Fatalf("expected 3 users in A, got %d", ucountA)
+    }
+
+    var ucountB int64
+    if err := dbB.Model(&models.User{}).Count(&ucountB).Error; err != nil {
+        t.Fatalf("count users B: %v", err)
+    }
+    if ucountB != 3 {
+        t.Fatalf("expected 3 users in B, got %d", ucountB)
     }
 }
