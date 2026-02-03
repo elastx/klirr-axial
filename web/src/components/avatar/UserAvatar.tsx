@@ -1,7 +1,7 @@
 import { AvatarConfiguration } from "./types";
 import { randomProperties, ColorSpace } from "./properties";
 import { paths } from "./paths";
-import { Avatar } from "@mantine/core";
+import { Avatar, Tooltip } from "@mantine/core";
 import { defaultColorSpace } from "./defaultColorSpace";
 
 type AvatarProps = {
@@ -460,67 +460,69 @@ const UserAvatar: React.FC<AvatarProps> = ({
   ]);
 
   return (
-    <Avatar
-      size={size}
-      gradient={{ from: darkestColor, to: lightestColor }}
-      variant="gradient"
-    >
-      <svg
-        viewBox="0 0 280 280"
-        xmlns="http://www.w3.org/2000/svg"
-        style={{
-          width: "100%",
-          height: "100%",
-          filter: "drop-shadow(rgba(0, 0, 0, 0.6) 3px 10px 12px)",
-        }}
+    <Tooltip label={seed} withArrow>
+      <Avatar
+        size={size}
+        gradient={{ from: darkestColor, to: lightestColor }}
+        variant="gradient"
       >
-        {group(
-          funcs.skin(avatar.skinColor),
-          positions.skin.x,
-          positions.skin.y
-        )}
-        {group(
-          funcs.clothing(avatar.clothingColor, avatar.clothingGraphic),
-          positions.clothing.x,
-          positions.clothing.y
-        )}
-        {group(
-          funcs.mouth(avatar.skinColor),
-          positions.mouth.x,
-          positions.mouth.y
-        )}
-        {group(
-          funcs.nose(avatar.skinColor),
-          positions.nose.x,
-          positions.nose.y
-        )}
-        {group(
-          funcs.eyes(avatar.skinColor),
-          positions.eyes.x,
-          positions.eyes.y
-        )}
-        {group(
-          funcs.eyebrows(avatar.hairColor),
-          positions.eyebrows.x,
-          positions.eyebrows.y
-        )}
-        {group(
-          funcs.top(avatar.topColor, avatar.hairColor),
-          positions.top.x,
-          positions.top.y
-        )}
-        {group(
-          funcs.facialHair(avatar.facialHairColor),
-          positions.facialHair.x,
-          positions.facialHair.y
-        )}
-        {group(
-          funcs.accessory(avatar.accessoryColor),
-          positions.accessories.x,
-          positions.accessories.y
-        )}
-      </svg>
-    </Avatar>
+        <svg
+          viewBox="0 0 280 280"
+          xmlns="http://www.w3.org/2000/svg"
+          style={{
+            width: "100%",
+            height: "100%",
+            filter: "drop-shadow(rgba(0, 0, 0, 0.6) 3px 10px 12px)",
+          }}
+        >
+          {group(
+            funcs.skin(avatar.skinColor),
+            positions.skin.x,
+            positions.skin.y,
+          )}
+          {group(
+            funcs.clothing(avatar.clothingColor, avatar.clothingGraphic),
+            positions.clothing.x,
+            positions.clothing.y,
+          )}
+          {group(
+            funcs.mouth(avatar.skinColor),
+            positions.mouth.x,
+            positions.mouth.y,
+          )}
+          {group(
+            funcs.nose(avatar.skinColor),
+            positions.nose.x,
+            positions.nose.y,
+          )}
+          {group(
+            funcs.eyes(avatar.skinColor),
+            positions.eyes.x,
+            positions.eyes.y,
+          )}
+          {group(
+            funcs.eyebrows(avatar.hairColor),
+            positions.eyebrows.x,
+            positions.eyebrows.y,
+          )}
+          {group(
+            funcs.top(avatar.topColor, avatar.hairColor),
+            positions.top.x,
+            positions.top.y,
+          )}
+          {group(
+            funcs.facialHair(avatar.facialHairColor),
+            positions.facialHair.x,
+            positions.facialHair.y,
+          )}
+          {group(
+            funcs.accessory(avatar.accessoryColor),
+            positions.accessories.x,
+            positions.accessories.y,
+          )}
+        </svg>
+      </Avatar>
+    </Tooltip>
   );
 };
 

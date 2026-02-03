@@ -1,9 +1,10 @@
-import { Text, Paper, Code, Button, Group, Stack } from "@mantine/core";
+import { Button, Code, Group, Paper, Stack, Text } from "@mantine/core";
+import { IconAlertTriangle, IconThumbUp } from "@tabler/icons-react";
+import { useState } from "react";
 import { GPGService, UserInfo } from "../services/gpg";
 import UserAvatar from "./avatar/UserAvatar";
-import { useState } from "react";
 
-export function KeyManagement() {
+export function UserSettings() {
   const [currentUser, setCurrentUser] = useState<UserInfo | null>(null);
 
   const gpg = GPGService.getInstance();
@@ -25,7 +26,7 @@ export function KeyManagement() {
   return (
     <Paper p="md" withBorder>
       <Text size="xl" fw={500} mb="md">
-        Key Management
+        User Settings
       </Text>
 
       <Group mb="md">
@@ -44,14 +45,16 @@ export function KeyManagement() {
               <Code block style={{ flexGrow: 1 }}>
                 {gpg.getCurrentFingerprint()}
               </Code>
-              <Button
-                variant="light"
-                onClick={() =>
-                  copyToClipboard(gpg.getCurrentFingerprint() || "")
-                }
-              >
-                Copy
-              </Button>
+              <Stack>
+                <Button
+                  variant="light"
+                  onClick={() =>
+                    copyToClipboard(gpg.getCurrentFingerprint() || "")
+                  }
+                >
+                  Copy
+                </Button>
+              </Stack>
             </Group>
           </Stack>
         </Stack>
@@ -64,12 +67,24 @@ export function KeyManagement() {
         <Code block style={{ flexGrow: 1, wordBreak: "break-all" }}>
           {gpg.getCurrentPublicKey()}
         </Code>
-        <Button
-          variant="light"
-          onClick={() => copyToClipboard(gpg.getCurrentPublicKey() || "")}
-        >
-          Copy
-        </Button>
+        <Stack>
+          <Button
+            variant="light"
+            onClick={() => copyToClipboard(gpg.getCurrentPublicKey() || "")}
+            leftSection={<IconThumbUp size={16} color="green" />}
+          >
+            Copy Public
+          </Button>
+          <Button
+            variant="light"
+            onClick={async () => {
+              copyToClipboard(gpg.getCurrentPrivateKey() || "");
+            }}
+            leftSection={<IconAlertTriangle size={16} color="red" />}
+          >
+            Copy Private
+          </Button>
+        </Stack>
       </Group>
     </Paper>
   );

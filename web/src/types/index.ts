@@ -1,3 +1,5 @@
+import { GPGService } from "../services/gpg";
+
 export interface BulletinPost {
   id: string;
   parent_id?: string;
@@ -45,4 +47,17 @@ export interface KeyPair {
   publicKey: string;
   privateKey: string;
   fingerprint: string;
+}
+
+// Hydrate user from public key using gpg.extractUserInfo
+export async function hydrateUser(user: User | StoredUser): Promise<User> {
+  return GPGService.getInstance()
+    .extractUserInfo(user.public_key)
+    .then(
+      (extraUserInfo) =>
+        ({
+          ...user,
+          ...extraUserInfo,
+        }) as User,
+    );
 }

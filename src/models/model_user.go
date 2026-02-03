@@ -19,8 +19,6 @@ type CreateUser struct {
 type User struct {
 	Base
 	CreateUser
-	Name        string    `json:"name,omitempty" gorm:"column:name,omitempty"`
-	Email       string    `json:"email,omitempty" gorm:"column:email,omitempty"`
 	Fingerprint string    `json:"fingerprint" gorm:"uniqueIndex"`
 	Signature   string    `json:"signature,omitempty"`
 	Signer      string    `json:"signer,omitempty"`
@@ -35,8 +33,6 @@ func (User) TableName() string {
 func (u *User) Hash() string {
 	idStrings := []string{
 		string(u.Fingerprint),
-		string(u.Name),
-		string(u.Email),
 		string(u.Signer),
 		string(u.Signature),
 		u.SignedAt.Format(time.RFC3339Nano),
