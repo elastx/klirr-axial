@@ -25,6 +25,8 @@ func LoadConfig() (Config, error) {
 				MulticastPort:    45678,
 				APIPort:          8080,
 				LogLevel:         "info",
+				FileStoragePath:  "./data/files",
+				MaxFileSize:      100 * 1024 * 1024, // 100MB default
 				Database: DatabaseConfig{
 					Host:     "localhost",
 					Port:     5432,

@@ -42,6 +42,9 @@ func main() {
 
 	fmt.Printf("Node %s hash: %s\n", nodeID, hashes.Full)
 
+	// Initialize API config (needed for file uploads)
+	api.SetConfig(&cfg)
+
 	// Create single multicast socket
 	connections, err := discovery.CreateMulticastSockets(cfg)
 	if err != nil {

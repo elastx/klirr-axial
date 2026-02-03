@@ -13,6 +13,7 @@ import (
 type HashSet struct {
 	Messages string `json:"messages"`
 	Users    string `json:"users"`
+	Files    string `json:"files"`
 	Full     string `json:"full"`
 }
 
@@ -20,6 +21,7 @@ var (
 	hashes = HashSet{
 		Messages: "",
 		Users:    "",
+		Files:    "",
 		Full:     "",
 	}
 )
@@ -76,6 +78,21 @@ func GetUsersHash(db *gorm.DB) (string, error) {
 	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
+// GetFilesHash calculates a hash of file IDs ordered by timestamp
+func GetFilesHash(db *gorm.DB) (string, error) {
+	var fileIDs []string
+	if err := db.Model(&File{}).Order("created_at").Pluck("id", &fileIDs).Error; err != nil {
+		return "", fmt.Errorf("failed to get file IDs: %v", err)
+	}
+
+	hasher := sha256.New()
+	for _, id := range fileIDs {
+		hasher.Write([]byte(id))
+	}
+
+	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
 func RefreshHashes(db *gorm.DB) error {
 	messagesHash, err := GetMessagesHash(db, nil, nil)
 	if err != nil {
@@ -87,14 +104,21 @@ func RefreshHashes(db *gorm.DB) error {
 		return err
 	}
 
+	filesHash, err := GetFilesHash(db)
+	if err != nil {
+		return err
+	}
+
 	// Combine hashes in a deterministic order
 	hasher := sha256.New()
 	hasher.Write([]byte("messages:" + messagesHash))
 	hasher.Write([]byte("users:" + usersHash))
+	hasher.Write([]byte("files:" + filesHash))
 
 	hashes = HashSet{
 		Messages: messagesHash,
 		Users:    usersHash,
+		Files:    filesHash,
 		Full:     hex.EncodeToString(hasher.Sum(nil)),
 	}
 
