@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"axial/api"
@@ -28,7 +27,7 @@ func StartSync(node remote.API, hash string) error {
 	}
 	defer models.EndSync()
 
-	periods, stringRanges := startingSyncRanges()
+	periods, stringRanges := startingSyncRanges(DefaultClock)
 	hashedPeriods, err := models.GenerateHashRanges(models.DB, periods)
 	if err != nil {
 		return err
@@ -95,114 +94,71 @@ func Sync(node remote.API, hashedPeriods []models.HashedPeriod, hashedUsers []mo
 		return []models.Message{}, nil
 	}
 
-	syncRequest := api.SyncRequest{
-		Ranges: hashedPeriods,
-	}
-
-	jsonRequest, err := json.Marshal(syncRequest)
-	if err != nil {
-		return []models.Message{}, err
-	}
-
-	fmt.Printf("Sending sync request to %s: %s\n", node.Address, string(jsonRequest))
-
-	response, err := http.Post(fmt.Sprintf("http://%s/v1/sync", node.Address), "application/json", bytes.NewBuffer(jsonRequest))
-	if err != nil {
-		return []models.Message{}, fmt.Errorf("failed to send sync request: %v", err)
-	}
-	defer response.Body.Close()
-
-	var syncResponse api.SyncResponse
-	err = json.NewDecoder(response.Body).Decode(&syncResponse)
-	if err != nil {
-		return []models.Message{}, fmt.Errorf("failed to decode sync response: %v", err)
-	}
-
-	fmt.Printf("Received sync response from %s: %+v\n", node.Address, syncResponse)
-
-	if syncResponse.IsBusy {
-		// Wait until another time.
-		return []models.Message{}, nil
-	}
-
+	store := &api.ModelSyncStore{}
 	messagesMissingInRemote := []models.Message{}
 
-	for _, messagesPeriod := range syncResponse.Messages {
-		ourMessages, err := models.GetMessagesByPeriod(models.DB, messagesPeriod.Period)
+	// Iterative drill-down loop
+	nextPeriods := hashedPeriods
+	nextUsers := hashedUsers
+
+	for {
+		syncRequest := api.SyncRequest{Ranges: nextPeriods, Users: nextUsers}
+		jsonRequest, err := json.Marshal(syncRequest)
 		if err != nil {
-			return []models.Message{}, fmt.Errorf("failed to get messages by period: %v", err)
+			return []models.Message{}, err
 		}
 
-		for _, message := range messagesPeriod.Messages {
-			if !message.In(ourMessages) {
-				fmt.Printf("Inserting message into our database: %+v\n", message)
-				// Insert message into our database
-				if err := models.DB.Create(&message).Error; err != nil {
-					// Ignore duplicate key errors since those messages were already synced
-					if !strings.Contains(err.Error(), "duplicate key") {
-						return []models.Message{}, err
-					}
-				}
-			}
-		}
+		fmt.Printf("Sending sync request to %s: %s\n", node.Address, string(jsonRequest))
 
-		for _, message := range ourMessages {
-			if !message.In(messagesPeriod.Messages) {
-				messagesMissingInRemote = append(messagesMissingInRemote, message)
-			}
-		}
-	}
-
-	periodsForRemoteHashes := []models.Period{}
-	for _, hashedPeriod := range syncResponse.Ranges {
-		periodsForRemoteHashes = append(periodsForRemoteHashes, hashedPeriod.Period)
-	}
-
-	ourHashes, err := models.GenerateHashRanges(models.DB, periodsForRemoteHashes)
-	if err != nil {
-		return []models.Message{}, fmt.Errorf("failed to generate hash ranges: %v", err)
-	}
-
-	hashedPeriodsToCheck := []models.HashedPeriod{}
-
-	for _, ourHash := range ourHashes {
-		start := models.RealizeStart(ourHash.Start)
-		end := models.RealizeEnd(ourHash.End)
-		for _, theirHash := range syncResponse.Ranges {
-			theirStart := models.RealizeStart(theirHash.Start)
-			theirEnd := models.RealizeEnd(theirHash.End)
-			if theirStart == start && theirEnd == end && theirHash.Hash != ourHash.Hash {
-				hashedPeriodsToCheck = append(hashedPeriodsToCheck, theirHash)
-			}
-		}
-	}
-
-	userRangesToCheck := []models.HashedUsersRange{}
-
-	for _, hashedUserRange := range syncResponse.UserRangeHashes {
-		ourUserHash, err := models.GetUsersHashByFingerprintRange(models.DB, hashedUserRange.Start, hashedUserRange.End)
+		req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s/v1/sync", node.Address), bytes.NewBuffer(jsonRequest))
 		if err != nil {
-			return []models.Message{}, fmt.Errorf("failed to get users by fingerprint range: %v", err)
+			return []models.Message{}, fmt.Errorf("failed to build sync request: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		response, err := Client.Do(req)
+		if err != nil {
+			return []models.Message{}, fmt.Errorf("failed to send sync request: %v", err)
+		}
+		var syncResponse api.SyncResponse
+		err = json.NewDecoder(response.Body).Decode(&syncResponse)
+		response.Body.Close()
+		if err != nil {
+			return []models.Message{}, fmt.Errorf("failed to decode sync response: %v", err)
 		}
 
-		if ourUserHash != hashedUserRange.Hash {
-			userRangesToCheck = append(userRangesToCheck, hashedUserRange)
+		if syncResponse.IsBusy {
+			return messagesMissingInRemote, nil
 		}
 
-	}
+		// Apply incoming messages
+		if err := ApplyIncomingMessages(store, syncResponse.Messages); err != nil {
+			return []models.Message{}, err
+		}
 
-	newMessagesMissingInRemote, err := Sync(node, hashedPeriodsToCheck, userRangesToCheck)
-	if err != nil {
-		return []models.Message{}, fmt.Errorf("failed to sync new messages missing in remote: %v", err)
-	}
+		// Accumulate messages missing on remote
+		localMissing, err := CollectMissingInRemote(store, syncResponse.Messages)
+		if err != nil {
+			return []models.Message{}, err
+		}
+		messagesMissingInRemote = append(messagesMissingInRemote, localMissing...)
 
-	messagesMissingInRemote = append(messagesMissingInRemote, newMessagesMissingInRemote...)
+		// Determine next drill-down request
+		periodsToCheck, usersToCheck, err := NextRequestFromHashes(store, syncResponse)
+		if err != nil {
+			return []models.Message{}, err
+		}
+
+		if len(periodsToCheck) == 0 && len(usersToCheck) == 0 {
+			break
+		}
+		nextPeriods = periodsToCheck
+		nextUsers = usersToCheck
+	}
 
 	return messagesMissingInRemote, nil
 }
 
-func startingSyncRanges() ([]models.Period, []models.StringRange) {
-
+func startingSyncRanges(clock Clock) ([]models.Period, []models.StringRange) {
 	earliestStartTime := models.RealizeStart(nil)
 	latestEndTime := models.RealizeEnd(nil)
 
@@ -216,7 +172,7 @@ func startingSyncRanges() ([]models.Period, []models.StringRange) {
 		{-2, 0, 0},
 	}
 	var previousStart *time.Time
-	weekStart := getWeekStart()
+	weekStart := getWeekStart(clock)
 	if weekStart.Before(earliestStartTime) {
 		previousStart = &earliestStartTime
 	} else {
@@ -255,21 +211,21 @@ func startingSyncRanges() ([]models.Period, []models.StringRange) {
 	var userRanges []models.StringRange
 	for i := 0; i < 10; i++ {
 		userRanges = append(userRanges, models.StringRange{
-			Start: string('0' + i),
-			End:   string('0' + i + 1),
+			Start: string(rune('0' + i)),
+			End:   string(rune('0' + i + 1)),
 		})
 	}
 	for i := 0; i < 25; i++ {
 		userRanges = append(userRanges, models.StringRange{
-			Start: string('a' + i),
-			End:   string('a' + i + 1),
+			Start: string(rune('a' + i)),
+			End:   string(rune('a' + i + 1)),
 		})
 	}
 	return periods, userRanges
 }
 
-func getWeekStart() time.Time {
-	now := time.Now()
+func getWeekStart(clock Clock) time.Time {
+	now := clock.Now()
 	weekday := now.Weekday()
 	if weekday == time.Sunday {
 		weekday = 7

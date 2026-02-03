@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
-	"sort"
 )
 
 type UserRegistration struct {
@@ -235,7 +235,7 @@ func handleRecentUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	// Map for quick lookup
 	umap := map[string]models.User{}
-	for _, u := range users { umap[u.Fingerprint] = u }
+	for _, u := range users { umap[string(u.Fingerprint)] = u }
 	ordered := make([]models.User, 0, len(fps))
 	for _, fp := range fps {
 		if u, ok := umap[fp]; ok { ordered = append(ordered, u) }

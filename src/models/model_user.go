@@ -19,10 +19,10 @@ type CreateUser struct {
 type User struct {
 	Base
 	CreateUser
-	Fingerprint string    `json:"fingerprint" gorm:"uniqueIndex"`
-	Signature   string    `json:"signature,omitempty"`
-	Signer      string    `json:"signer,omitempty"`
-	SignedAt    time.Time `json:"signed_at,omitempty"`
+	Fingerprint Fingerprint `json:"fingerprint" gorm:"uniqueIndex"`
+	Signature   Signature   `json:"signature,omitempty"`
+	Signer      Fingerprint `json:"signer,omitempty"`
+	SignedAt    time.Time   `json:"signed_at,omitempty"`
 }
 
 // Gorm setup
@@ -94,7 +94,7 @@ func (u *User) GetFingerprint() Fingerprint {
 }
 
 func (u *User) SetFingerprint(fingerprint Fingerprint) {
-	u.Fingerprint = string(fingerprint)
+	u.Fingerprint = fingerprint
 }
 
 func (u *User) GetSigner() Fingerprint {
@@ -102,5 +102,5 @@ func (u *User) GetSigner() Fingerprint {
 }
 
 func (u *User) SetSigner(signer Fingerprint) {
-	u.Signer = string(signer)
+	u.Signer = signer
 }
