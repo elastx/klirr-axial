@@ -14,6 +14,7 @@ import (
 type MemoryStore struct {
 	Messages []models.Message
 	Users    []models.User
+	Bulletins []models.Bulletin
 }
 
 func (m *MemoryStore) GenerateHashRanges(periods []models.Period) ([]models.HashedPeriod, error) {
@@ -93,6 +94,16 @@ func (m *MemoryStore) UpsertMessage(msg models.Message) error {
 	return nil
 }
 
+func (m *MemoryStore) UpsertBulletin(b models.Bulletin) error {
+	for _, existing := range m.Bulletins {
+		if existing.ID == b.ID {
+			return nil
+		}
+	}
+	m.Bulletins = append(m.Bulletins, b)
+	return nil
+}
+
 // Helpers
 func (m *MemoryStore) messagesInPeriod(p models.Period) []models.Message {
 	start := models.RealizeStart(p.Start)
@@ -123,6 +134,7 @@ func (m *MemoryStore) hashMessagesInPeriod(p models.Period) string {
 // Seed helpers for tests
 func (m *MemoryStore) AddMessages(msgs []models.Message) { m.Messages = append(m.Messages, msgs...) }
 func (m *MemoryStore) AddUsers(users []models.User)     { m.Users = append(m.Users, users...) }
+func (m *MemoryStore) AddBulletins(b []models.Bulletin) { m.Bulletins = append(m.Bulletins, b...) }
 
 // Utility to construct ranges like production
 func StartingSyncRangesForTest(now time.Time) ([]models.Period, []models.StringRange) {
