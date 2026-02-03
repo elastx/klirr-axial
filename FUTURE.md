@@ -1,5 +1,10 @@
 # Future Plans
 
+## Derive GPG key from passkey in frontend
+- So users can use Axial without storing their private key unsafely
+
+## Derive GPG key from the cool ID idea from Team DFRI
+
 ## Websocket between frontend and backend
 - Real-time frontend updates when new data is synchronized
 

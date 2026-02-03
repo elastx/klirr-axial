@@ -15,7 +15,9 @@ export class GPGService {
   private static instance: GPGService;
   private currentKeyPair: KeyPair | null = null;
 
-  private async computeFingerprintFromKey(publicKey: openpgp.Key): Promise<string> {
+  private async computeFingerprintFromKey(
+    publicKey: openpgp.Key,
+  ): Promise<string> {
     try {
       // Prefer signing subkey to match backend behavior
       const sign = await (publicKey as any).getSigningKey?.();
@@ -33,7 +35,9 @@ export class GPGService {
     return publicKey.getKeyID().toHex().toLowerCase();
   }
 
-  private async computeFingerprintFromArmored(armoredKey: string): Promise<string> {
+  private async computeFingerprintFromArmored(
+    armoredKey: string,
+  ): Promise<string> {
     const key = await openpgp.readKey({ armoredKey });
     return this.computeFingerprintFromKey(key);
   }
@@ -52,7 +56,7 @@ export class GPGService {
                 this.currentKeyPair.fingerprint = keyId;
                 localStorage.setItem(
                   STORAGE_KEY,
-                  JSON.stringify(this.currentKeyPair)
+                  JSON.stringify(this.currentKeyPair),
                 );
               }
             })
@@ -144,7 +148,7 @@ export class GPGService {
 
   async generateKeyWithoutSaving(
     name: string,
-    email: string
+    email: string,
   ): Promise<{
     privateKey: string;
     publicKey: string;
@@ -240,7 +244,7 @@ export class GPGService {
 
   async encryptMessage(
     message: string,
-    recipientPublicKey: string
+    recipientPublicKey: string,
   ): Promise<string> {
     const publicKey = await openpgp.readKey({ armoredKey: recipientPublicKey });
 
@@ -292,7 +296,7 @@ export class GPGService {
 
   async verifyClearsignedMessage(
     armoredCleartext: string,
-    signerFingerprint: string
+    signerFingerprint: string,
   ): Promise<boolean> {
     const apiService = APIService.getInstance();
     const cleartext = await openpgp.readCleartextMessage({
@@ -301,7 +305,9 @@ export class GPGService {
     const publicKeyArmored = await apiService
       .getUser(signerFingerprint)
       .then((user: User) => user.public_key);
-    const verificationKey = await openpgp.readKey({ armoredKey: publicKeyArmored });
+    const verificationKey = await openpgp.readKey({
+      armoredKey: publicKeyArmored,
+    });
     const result = await openpgp.verify({
       message: cleartext,
       verificationKeys: verificationKey,
@@ -319,7 +325,7 @@ export class GPGService {
   async verifyMessageSignature(
     message: string,
     signature: string,
-    signerFingerprint: string
+    signerFingerprint: string,
   ): Promise<boolean> {
     const apiService = APIService.getInstance();
     console.log("signature", signature);
@@ -330,7 +336,7 @@ export class GPGService {
         .getUser(signerFingerprint)
         .then((user: User) => user.public_key)
         .then((publicKey: string) =>
-          openpgp.readKey({ armoredKey: publicKey })
+          openpgp.readKey({ armoredKey: publicKey }),
         ),
     ]).then(([message, signature, verificationKey]) =>
       openpgp
@@ -341,7 +347,7 @@ export class GPGService {
         })
         .then((verified) => {
           return verified.signatures[0].verified;
-        })
+        }),
     );
   }
 
@@ -351,6 +357,10 @@ export class GPGService {
 
   getCurrentPublicKey(): string | null {
     return this.currentKeyPair?.publicKey || null;
+  }
+
+  getCurrentPrivateKey(): string | null {
+    return this.currentKeyPair?.privateKey || null;
   }
 
   isKeyLoaded(): boolean {
