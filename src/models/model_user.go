@@ -46,7 +46,7 @@ func (u *User) Hash() string {
 	return hex.EncodeToString(hash[:])
 }
 
-func (u *User) BeforeCreate(*gorm.DB) error {
+func (u *User) BeforeCreate(tx *gorm.DB) error {
 
 	pubKey := u.GetPublicKey()
 	fingerprint, err := pubKey.GetFingerprint()
@@ -76,7 +76,8 @@ func (u *User) BeforeCreate(*gorm.DB) error {
 		u.SetFingerprint(fingerprint)
 	}
 
-	u.Base.BeforeCreate(u.Hash())
+	u.Base.ID = u.Hash()
+	u.Base.BeforeCreate(tx)
 	return nil
 }
 

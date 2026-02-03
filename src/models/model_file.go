@@ -79,7 +79,7 @@ func (f *File) Hash() string {
 	return hex.EncodeToString(hash[:])
 }
 
-func (f *File) BeforeCreate(*gorm.DB) error {
+func (f *File) BeforeCreate(tx *gorm.DB) error {
 	// Validate file size (max 100MB by default)
 	maxSize := int64(100 * 1024 * 1024)
 	if f.Size > maxSize {
@@ -109,7 +109,8 @@ func (f *File) BeforeCreate(*gorm.DB) error {
 			f.ContentHash)
 	}
 
-	f.Base.BeforeCreate(f.Hash())
+	f.Base.ID = f.Hash()
+	f.Base.BeforeCreate(tx)
 
 	return nil
 }

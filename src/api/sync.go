@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+
+	"gorm.io/gorm"
 )
 
 const (
@@ -60,7 +62,18 @@ func handleSyncRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
+	resp, err := ComputeSyncResponse(models.DB, req)
+	if err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(resp)
+}
 
+// ComputeSyncResponse encapsulates the core sync logic, producing a response
+// for a given request and database. It is used by the HTTP handler and can be
+// reused by tests to simulate in-memory sync exchanges without HTTP.
+func ComputeSyncResponse(db *gorm.DB, req SyncRequest) (SyncResponse, error) {
 	periods := []models.Period{}
 	for _, period := range req.Ranges {
 		periods = append(periods, models.Period{
@@ -71,11 +84,9 @@ func handleSyncRequest(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("Received %d time ranges to check\n", len(periods))
 
 	// Generate our hashes for the same ranges
-	ourRanges, err := models.GenerateHashRanges(models.DB, periods)
+	ourRanges, err := models.GenerateHashRanges(db, periods)
 	if err != nil {
-		fmt.Printf("Failed to generate hash ranges: %v\n", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
+		return SyncResponse{}, fmt.Errorf("failed to generate hash ranges: %v", err)
 	}
 	fmt.Printf("Generated %d hash ranges\n", len(ourRanges))
 
@@ -106,11 +117,9 @@ func handleSyncRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Compare hashes and prepare response
 	resp := SyncResponse{}
-	resp.Hashes, err = models.GetDatabaseHashes(models.DB)
+	resp.Hashes, err = models.GetDatabaseHashes(db)
 	if err != nil {
-		fmt.Printf("Failed to get database hash: %v\n", err)
-		http.Error(w, "Database error", http.StatusInternalServerError)
-		return
+		return SyncResponse{}, fmt.Errorf("failed to get database hash: %v", err)
 	}
 	fmt.Printf("Our database hashes: %+v\n", resp.Hashes)
 
@@ -120,7 +129,7 @@ func handleSyncRequest(w http.ResponseWriter, r *http.Request) {
 			Start: mismatchingRange.Start,
 			End:   mismatchingRange.End,
 		}
-		counts[index] = models.CountMessagesByPeriod(models.DB, period)
+		counts[index] = models.CountMessagesByPeriod(db, period)
 		fmt.Printf("Range %d has %d messages\n", index, counts[index])
 	}
 
@@ -141,11 +150,9 @@ func handleSyncRequest(w http.ResponseWriter, r *http.Request) {
 		if totalPlainMessages+counts[index] < maxBatchSize {
 			fmt.Printf("Getting messages for range %d (count: %d, total so far: %d)\n",
 				index, counts[index], totalPlainMessages)
-			messages, err := models.GetMessagesByPeriod(models.DB, mismatchingRange.Period)
+			messages, err := models.GetMessagesByPeriod(db, mismatchingRange.Period)
 			if err != nil {
-				fmt.Printf("Failed to get messages: %v\n", err)
-				http.Error(w, "Database error", http.StatusInternalServerError)
-				return
+				return SyncResponse{}, fmt.Errorf("failed to get messages: %v", err)
 			}
 
 			messagesPeriod := models.MessagesPeriod{
@@ -167,11 +174,9 @@ func handleSyncRequest(w http.ResponseWriter, r *http.Request) {
 			fmt.Printf("Splitting range into %d parts\n", splits)
 			periods := models.SplitTimeRange(mismatchingRange.Period, splits)
 			for _, period := range periods {
-				hashedPeriods, err := models.GenerateHashRanges(models.DB, []models.Period{period})
+				hashedPeriods, err := models.GenerateHashRanges(db, []models.Period{period})
 				if err != nil {
-					fmt.Printf("Failed to generate hash ranges for split: %v\n", err)
-					http.Error(w, "Database error", http.StatusInternalServerError)
-					return
+					return SyncResponse{}, fmt.Errorf("failed to generate hash ranges for split: %v", err)
 				}
 				for _, hashedPeriod := range hashedPeriods {
 					resp.Ranges = append(resp.Ranges, models.HashedPeriod{
@@ -183,5 +188,5 @@ func handleSyncRequest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	json.NewEncoder(w).Encode(resp)
+	return resp, nil
 }

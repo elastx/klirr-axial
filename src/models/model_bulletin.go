@@ -43,7 +43,7 @@ func (b *Bulletin) Hash() string {
 	return hex.EncodeToString(hash[:])
 }
 
-func (m *Bulletin) BeforeCreate(*gorm.DB) error {
+func (m *Bulletin) BeforeCreate(tx *gorm.DB) error {
 	sender, recipients, encrypted, signed, err := m.Content.Analyze()
 	if err != nil {
 		return err
@@ -67,7 +67,8 @@ func (m *Bulletin) BeforeCreate(*gorm.DB) error {
 		m.Sender = sender
 	}
 	
-	m.Base.BeforeCreate(m.Hash())
+	m.Base.ID = m.Hash()
+	m.Base.BeforeCreate(tx)
 
 	return nil
 }
