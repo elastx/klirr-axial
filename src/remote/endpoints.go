@@ -63,3 +63,19 @@ func (n *API) SyncUsers() Endpoint[[]models.User, interface{}, interface{}] {
 		Path:    "sync/users",
 	}
 }
+
+func (n *API) SyncFiles() Endpoint[[]models.File, interface{}, interface{}] {
+	return Endpoint[[]models.File, interface{}, interface{}]{
+		Node:    n,
+		Version: "v1",
+		Path:    "sync/files",
+	}
+}
+
+func (n *API) FileMetadata(fileID string) Endpoint[interface{}, interface{}, models.File] {
+	return Endpoint[interface{}, interface{}, models.File]{
+		Node:    n,
+		Version: "v1",
+		Path:    "files/metadata/" + fileID,
+	}
+}

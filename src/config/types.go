@@ -14,5 +14,7 @@ type Config struct {
 	MulticastPort    int            `args:"--multicast-port" yaml:"multicast_port" env:"MULTICAST_PORT"`
 	APIPort          int            `args:"--api-port" yaml:"api_port" env:"API_PORT"`
 	LogLevel         string         `args:"--log-level" yaml:"log_level" env:"LOG_LEVEL"`
+	FileStoragePath  string         `args:"--file-storage-path" yaml:"file_storage_path" env:"FILE_STORAGE_PATH"`
+	MaxFileSize      int64          `args:"--max-file-size" yaml:"max_file_size" env:"MAX_FILE_SIZE"` // in bytes
 	Database         DatabaseConfig `yaml:"database"`
 }

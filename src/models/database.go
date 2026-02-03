@@ -37,7 +37,7 @@ func InitDB(cfg config.DatabaseConfig) error {
 
 	log.Println("Running migrations...")
 	// Run migrations
-	if err := DB.AutoMigrate(&User{}, &Message{}, &Bulletin{}); err != nil {
+	if err := DB.AutoMigrate(&User{}, &Message{}, &Bulletin{}, &File{}); err != nil {
 		return fmt.Errorf("failed to run migrations: %v", err)
 	}
 
