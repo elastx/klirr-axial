@@ -21,9 +21,10 @@ type Message struct {
 	CreateMessage
 }
 
-func (m *Message) In(messages []Message) bool {
-	for _, message := range messages {
-		if m.ID == message.ID {
+
+func (m *Message) In(items []Message) bool {
+	for _, item := range items {
+		if m.ID == item.ID {
 			return true
 		}
 	}

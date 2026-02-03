@@ -69,7 +69,12 @@ func StartSync(node remote.API, hash string) error {
 	defer models.EndSync()
 
 	periods, stringRanges := startingSyncRanges()
-	hashedPeriods, err := models.GetMessagesHashRanges(models.DB, periods)
+	hashedMessagesPeriods, err := models.GetMessagesHashRanges(models.DB, periods)
+	if err != nil {
+		return err
+	}
+
+	hashedBulletinsPeriods, err := models.GetBulletinsHashRanges(models.DB, periods)
 	if err != nil {
 		return err
 	}
@@ -82,34 +87,23 @@ func StartSync(node remote.API, hash string) error {
 	fmt.Printf("Synchronizing with %s\n", node.Address)
 
 	// Use HTTP requester by default in production flows.
-	messages, err := Sync(node, hashedPeriods, hashedUsers)
+	messages, bulletins, users, err := Sync(node, hashedMessagesPeriods, hashedBulletinsPeriods, hashedUsers)
 	if err != nil {
 		return err
 	}
 
-	// Get the usersMap that sent the messages
-	usersMap := map[string]*models.User{}
-	for _, message := range messages {
-		user, err := models.GetUserByFingerprint(message.Sender)
-		if err != nil {
-			return err
-		}
-		usersMap[string(user.Fingerprint)] = user
-	}
-	if len(usersMap) == 0 {
-		usersList := []models.User{}
-		for _, user := range usersMap {
-			usersList = append(usersList, *user)
-		}
+	SyncUsers(node, users)
 
-		SyncUsers(node, usersList)
+	// Sort messages by creation time
+	SortMessages(messages)
 
-		// Sort messages by creation time
-		SortMessages(messages)
+	// Send messages unique to this node to the remote node
+	SyncMessages(node, messages)
 
-		// Send messages unique to this node to the remote node
-		SyncMessages(node, messages)
-	}
+	SortBulletins(bulletins)
+
+	// Send bulletins unique to this node to the remote node
+	SyncBulletins(node, bulletins)
 
 	return nil
 }
@@ -124,47 +118,58 @@ func SortMessages(messages []models.Message) {
 	}
 }
 
+func SortBulletins(bulletins []models.Bulletin) {
+	for i := 0; i < len(bulletins); i++ {
+		for j := i + 1; j < len(bulletins); j++ {
+			if bulletins[i].CreatedAt.After(bulletins[j].CreatedAt) {
+				bulletins[i], bulletins[j] = bulletins[j], bulletins[i]
+			}
+		}
+	}
+}
+
 // Sync performs one round of synchronization with a remote node using the provided
 // hash ranges. It returns messages present locally but missing in the remote.
 //
 // For unit tests, prefer calling SyncWithRequester with a custom requester that
 // uses in-memory handlers to return api.SyncResponse.
-func Sync(node remote.API, hashedPeriods []models.HashedPeriod, hashedUsers []models.HashedUsersRange) ([]models.Message, error) {
-	return SyncWithRequester(httpSyncRequester{}, node, hashedPeriods, hashedUsers)
+func Sync(node remote.API, hashedMessagePeriods []models.HashedPeriod, hashedBulletinPeriods []models.HashedPeriod, hashedUsers []models.HashedUsersRange) ([]models.Message, []models.Bulletin, []models.User, error) {
+	return SyncWithRequester(httpSyncRequester{}, node, hashedMessagePeriods, hashedBulletinPeriods, hashedUsers)
 }
 
 // SyncWithRequester is identical to Sync but allows the caller to provide a
 // pluggable requester for testability.
-func SyncWithRequester(requester SyncRequester, node remote.API, hashedPeriods []models.HashedPeriod, hashedUsers []models.HashedUsersRange) ([]models.Message, error) {
-	if len(hashedPeriods) == 0 {
+func SyncWithRequester(requester SyncRequester, node remote.API, hashedMessagesPeriods []models.HashedPeriod, hashedBulletinPeriods []models.HashedPeriod, hashedUsers []models.HashedUsersRange) ([]models.Message, []models.Bulletin, []models.User, error) {
+	if len(hashedMessagesPeriods) == 0 {
 		fmt.Printf("No periods to sync with %s\n", node.Address)
-		return []models.Message{}, nil
+		return []models.Message{}, []models.Bulletin{}, []models.User{}, nil
 	}
 
 	syncRequest := api.SyncRequest{
-		MessageRanges: hashedPeriods,
+		MessageRanges: hashedMessagesPeriods,
 	}
 
 	// Let the requester handle the transport (HTTP in prod, in-memory in tests).
 	fmt.Printf("Sending sync request to %s\n", node.Address)
 	syncResponse, err := requester.RequestSync(node, syncRequest)
 	if err != nil {
-		return []models.Message{}, err
+		return []models.Message{}, []models.Bulletin{}, []models.User{}, err
 	}
 
 	fmt.Printf("Received sync response from %s: %+v\n", node.Address, syncResponse)
 
 	if syncResponse.IsBusy {
 		// Wait until another time.
-		return []models.Message{}, nil
+		return []models.Message{}, []models.Bulletin{}, []models.User{}, nil
 	}
 
+	// Messages
 	messagesMissingInRemote := []models.Message{}
 
 	for _, messagesPeriod := range syncResponse.Messages {
 		ourMessages, err := models.GetMessagesByPeriod(models.DB, messagesPeriod.Period)
 		if err != nil {
-			return []models.Message{}, fmt.Errorf("failed to get messages by period: %v", err)
+			return []models.Message{}, []models.Bulletin{}, []models.User{}, fmt.Errorf("failed to get messages by period: %v", err)
 		}
 
 		for _, message := range messagesPeriod.Messages {
@@ -174,7 +179,7 @@ func SyncWithRequester(requester SyncRequester, node remote.API, hashedPeriods [
 				if err := models.DB.Create(&message).Error; err != nil {
 					// Ignore duplicate key errors since those messages were already synced
 					if !strings.Contains(err.Error(), "duplicate key") {
-						return []models.Message{}, err
+						return []models.Message{}, []models.Bulletin{}, []models.User{}, err
 					}
 				}
 			}
@@ -187,24 +192,68 @@ func SyncWithRequester(requester SyncRequester, node remote.API, hashedPeriods [
 		}
 	}
 
-	periodsForRemoteHashes := []models.Period{}
-	for _, hashedPeriod := range syncResponse.Ranges {
-		periodsForRemoteHashes = append(periodsForRemoteHashes, hashedPeriod.Period)
+	periodsForRemoteMessagesHashes := []models.Period{}
+	for _, hashedPeriod := range syncResponse.MessageRanges {
+		periodsForRemoteMessagesHashes = append(periodsForRemoteMessagesHashes, hashedPeriod.Period)
 	}
 
-	ourHashes, err := models.GetMessagesHashRanges(models.DB, periodsForRemoteHashes)
+	ourMessagesHashes, err := models.GetMessagesHashRanges(models.DB, periodsForRemoteMessagesHashes)
 	if err != nil {
-		return []models.Message{}, fmt.Errorf("failed to generate hash ranges: %v", err)
+		return []models.Message{}, []models.Bulletin{}, []models.User{}, fmt.Errorf("failed to generate hash ranges: %v", err)
 	}
 
-	hashedPeriodsToCheck := mismatchedPeriods(ourHashes, syncResponse.Ranges)
+	hashedMessagesPeriodsToCheck := mismatchedMessagesPeriods(ourMessagesHashes, syncResponse.MessageRanges)
+
+	// Bulletins
+	bulletinsMissingInRemote := []models.Bulletin{}
+
+	for _, bulletinPeriod := range syncResponse.Bulletins {
+		ourBulletins, err := models.GetBulletinsByPeriod(models.DB, bulletinPeriod.Period)
+		if err != nil {
+			return []models.Message{}, []models.Bulletin{}, []models.User{}, fmt.Errorf("failed to get bulletins by period: %v", err)
+		}
+
+		for _, bulletin := range bulletinPeriod.Bulletins {
+			if !bulletin.In(ourBulletins) {
+				fmt.Printf("Inserting bulletin into our database: %+v\n", bulletin)
+				// Insert bulletin into our database
+				if err := models.DB.Create(&bulletin).Error; err != nil {
+					// Ignore duplicate key errors since those bulletins were already synced
+					if !strings.Contains(err.Error(), "duplicate key") {
+						return []models.Message{}, []models.Bulletin{}, []models.User{}, err
+					}
+				}
+			}
+		}
+
+		for _, bulletin := range ourBulletins {
+			if !bulletin.In(bulletinPeriod.Bulletins) {
+				bulletinsMissingInRemote = append(bulletinsMissingInRemote, bulletin)
+			}
+		}
+	}
+
+	periodsForRemoteBulletinHashes := []models.Period{}
+	for _, hashedPeriod := range syncResponse.BulletinRanges {
+		periodsForRemoteBulletinHashes = append(periodsForRemoteBulletinHashes, hashedPeriod.Period)
+	}
+
+	ourBulletinHashes, err := models.GetBulletinsHashRanges(models.DB, periodsForRemoteBulletinHashes)
+	if err != nil {
+		return []models.Message{}, []models.Bulletin{}, []models.User{}, fmt.Errorf("failed to generate bulletin hash ranges: %v", err)
+	}
+
+	hashedBulletinPeriodsToCheck := mismatchedMessagesPeriods(ourBulletinHashes, syncResponse.BulletinRanges)
+
+	// Users
+	usersMissingInRemote := []models.User{}
 
 	userRangesToCheck := []models.HashedUsersRange{}
 
 	for _, hashedUserRange := range syncResponse.UserRangeHashes {
 		ourUserHash, err := models.GetUsersHashByFingerprintRange(models.DB, hashedUserRange.Start, hashedUserRange.End)
 		if err != nil {
-			return []models.Message{}, fmt.Errorf("failed to get users by fingerprint range: %v", err)
+			return []models.Message{}, []models.Bulletin{}, []models.User{}, fmt.Errorf("failed to get users by fingerprint range: %v", err)
 		}
 
 		if ourUserHash != hashedUserRange.Hash {
@@ -213,20 +262,22 @@ func SyncWithRequester(requester SyncRequester, node remote.API, hashedPeriods [
 
 	}
 
-	newMessagesMissingInRemote, err := SyncWithRequester(requester, node, hashedPeriodsToCheck, userRangesToCheck)
+	newMessagesMissingInRemote, newBulletinsMissingInRemote, newUsersMissingInRemote, err := SyncWithRequester(requester, node, hashedMessagesPeriodsToCheck, hashedBulletinPeriodsToCheck, userRangesToCheck)
 	if err != nil {
-		return []models.Message{}, fmt.Errorf("failed to sync new messages missing in remote: %v", err)
+		return []models.Message{}, []models.Bulletin{}, []models.User{}, fmt.Errorf("failed to sync new messages missing in remote: %v", err)
 	}
 
 	messagesMissingInRemote = append(messagesMissingInRemote, newMessagesMissingInRemote...)
+	bulletinsMissingInRemote = append(bulletinsMissingInRemote, newBulletinsMissingInRemote...)
+	usersMissingInRemote = append(usersMissingInRemote, newUsersMissingInRemote...)
 
-	return messagesMissingInRemote, nil
+	return messagesMissingInRemote, bulletinsMissingInRemote, usersMissingInRemote, nil
 }
 
-// mismatchedPeriods returns the set of hashed periods from the remote that
+// mismatchedMessagesPeriods returns the set of hashed periods from the remote that
 // correspond to the same concrete time ranges as ours but have different
 // content hashes.
-func mismatchedPeriods(our []models.HashedPeriod, theirs []models.HashedPeriod) []models.HashedPeriod {
+func mismatchedMessagesPeriods(our []models.HashedPeriod, theirs []models.HashedPeriod) []models.HashedPeriod {
 	out := []models.HashedPeriod{}
 	for _, ourHash := range our {
 		start := models.RealizeStart(ourHash.Start)

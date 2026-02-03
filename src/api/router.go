@@ -40,6 +40,7 @@ func RegisterRoutes() {
 	http.HandleFunc("/v1/ping", handlePing)
 	http.HandleFunc("/v1/sync", handleSync)
 	http.HandleFunc("/v1/sync/messages", handleSyncMessages)
+	http.HandleFunc("/v1/sync/bulletins", handleSyncBulletins)
 	http.HandleFunc("/v1/sync/users", handleSyncUsers)
 	http.HandleFunc("/v1/sync/files", handleSyncFiles)
 

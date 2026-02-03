@@ -102,19 +102,12 @@ func ComputeSyncResponse(db *gorm.DB, req SyncRequest) (SyncResponse, error) {
 		for _, theirRange := range req.MessageRanges {
 			theirStart := models.RealizeStart(theirRange.Start)
 			theirEnd := models.RealizeEnd(theirRange.End)
-			if ourStart == theirStart && ourEnd == theirEnd {
-				fmt.Printf("Checking period ours: %v to %v, theirs: %v to %v\n", ourStart, ourEnd, theirStart, theirEnd)
+			if ourStart.Equal(theirStart) && ourEnd.Equal(theirEnd) {
 				if ourRange.Hash != theirRange.Hash {
 					fmt.Printf("Found mismatching hash for range %v to %v (our hash: %s, their hash: %s)\n",
 						ourStart, ourEnd, ourRange.Hash, theirRange.Hash)
 					missmatchingMessagesRanges = append(missmatchingMessagesRanges, ourRange)
-				} else {
-					fmt.Printf("No mismatching hash for range %v to %v (our hash: %s, their hash: %s)\n",
-						ourStart, ourEnd, ourRange.Hash, theirRange.Hash)
 				}
-			} else {
-				fmt.Printf("Periods do not match: ours: %v to %v, theirs: %v to %v\n",
-					ourStart, ourEnd, theirStart, theirEnd)
 			}
 		}
 	}
