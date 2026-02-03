@@ -2,6 +2,7 @@ package api
 
 import (
 	"axial/models"
+	"math"
 	"sort"
 	"strings"
 )
@@ -14,6 +15,8 @@ type SyncStore interface {
     GetMessagesByPeriod(period models.Period) ([]models.Message, error)
     GetDatabaseHashes() (models.HashSet, error)
     GetUsersHashByFingerprintRange(start, end string) (string, error)
+    CountUsersByFingerprintRange(start, end string) (int64, error)
+    GetUsersByFingerprintRange(start, end string) ([]models.User, error)
     UpsertMessage(msg models.Message) error
 }
 
@@ -38,6 +41,14 @@ func (s *ModelSyncStore) GetDatabaseHashes() (models.HashSet, error) {
 
 func (s *ModelSyncStore) GetUsersHashByFingerprintRange(start, end string) (string, error) {
     return models.GetUsersHashByFingerprintRange(models.DB, start, end)
+}
+
+func (s *ModelSyncStore) CountUsersByFingerprintRange(start, end string) (int64, error) {
+    return models.CountUsersByFingerprintRange(models.DB, start, end)
+}
+
+func (s *ModelSyncStore) GetUsersByFingerprintRange(start, end string) ([]models.User, error) {
+    return models.GetUsersByFingerprintRange(models.DB, start, end)
 }
 
 func (s *ModelSyncStore) UpsertMessage(msg models.Message) error {
@@ -123,8 +134,18 @@ func BuildSyncResponse(store SyncStore, req SyncRequest, maxBatchSize int) (Sync
             continue
         }
 
-        // Split oversized ranges into hashed subranges
-        splits := int(rk.count/(int64(maxBatchSize)*10)) + 1
+        // Split oversized ranges into hashed subranges.
+        // Strategy:
+        // - If the range is "very large" (>= 10x maxBatch), split aggressively so that
+        //   each subrange is roughly <= maxBatch to enable plain message transfer soon.
+        // - Otherwise, keep a single hashed range to avoid over-sharding in modest mismatches.
+        splits := 1
+        if rk.count >= int64(maxBatchSize)*10 {
+            splits = int(math.Ceil(float64(rk.count) / float64(maxBatchSize)))
+            if splits < 2 { // ensure at least 2 parts when we decide to split
+                splits = 2
+            }
+        }
         subPeriods := models.SplitTimeRange(period, splits)
         hashedSubs, err := store.GenerateHashRanges(subPeriods)
         if err != nil {
@@ -136,7 +157,7 @@ func BuildSyncResponse(store SyncStore, req SyncRequest, maxBatchSize int) (Sync
     }
 
     // Add user range mismatches, if any
-    if err := addUserRangeMismatches(store, req, &resp); err != nil {
+    if err := addUserRangeMismatches(store, req, &resp, maxBatchSize); err != nil {
         return resp, err
     }
 
@@ -144,7 +165,7 @@ func BuildSyncResponse(store SyncStore, req SyncRequest, maxBatchSize int) (Sync
 }
 
 // Compare user hashed ranges and include mismatches in response.
-func addUserRangeMismatches(store SyncStore, req SyncRequest, resp *SyncResponse) error {
+func addUserRangeMismatches(store SyncStore, req SyncRequest, resp *SyncResponse, maxBatchSize int) error {
     for _, userRange := range req.Users {
         ourHash, err := store.GetUsersHashByFingerprintRange(userRange.Start, userRange.End)
         if err != nil {
@@ -155,6 +176,19 @@ func addUserRangeMismatches(store SyncStore, req SyncRequest, resp *SyncResponse
                 StringRange: models.StringRange{Start: userRange.Start, End: userRange.End},
                 Hash:        ourHash,
             })
+
+            // If the mismatch is small enough, include actual users to allow immediate convergence.
+            // Note: No signature filtering; all users are eligible for sync.
+            if count, err := store.CountUsersByFingerprintRange(userRange.Start, userRange.End); err == nil {
+                if count > 0 && count <= int64(maxBatchSize) {
+                    if users, err := store.GetUsersByFingerprintRange(userRange.Start, userRange.End); err == nil {
+                        resp.Users = append(resp.Users, models.UsersRange{
+                            StringRange: models.StringRange{Start: userRange.Start, End: userRange.End},
+                            Users:       users,
+                        })
+                    }
+                }
+            }
         }
     }
     return nil

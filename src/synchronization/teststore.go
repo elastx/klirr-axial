@@ -84,6 +84,30 @@ func (m *MemoryStore) GetUsersHashByFingerprintRange(start, end string) (string,
 	return hex.EncodeToString(hu.Sum(nil)), nil
 }
 
+func (m *MemoryStore) CountUsersByFingerprintRange(start, end string) (int64, error) {
+	var n int64 = 0
+	for _, u := range m.Users {
+		fp := string(u.Fingerprint)
+		if fp >= start && fp <= end {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func (m *MemoryStore) GetUsersByFingerprintRange(start, end string) ([]models.User, error) {
+	users := []models.User{}
+	for _, u := range m.Users {
+		fp := string(u.Fingerprint)
+		if fp >= start && fp <= end {
+			users = append(users, u)
+		}
+	}
+	// Order by fingerprint for determinism
+	sort.Slice(users, func(i, j int) bool { return string(users[i].Fingerprint) < string(users[j].Fingerprint) })
+	return users, nil
+}
+
 func (m *MemoryStore) UpsertMessage(msg models.Message) error {
 	for _, existing := range m.Messages {
 		if existing.ID == msg.ID {

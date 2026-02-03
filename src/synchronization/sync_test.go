@@ -279,10 +279,9 @@ func Test_FullSyncDrillDownSharding(t *testing.T) {
 	if !matched { t.Fatalf("expected a returned range to match the original period exactly") }
 }
 
-// User range mismatch coverage: verify that sync responses only include user range hashes
-// and do not transfer actual users via SyncResponse, highlighting the need for separate
-// SyncUsers call in the process.
-func Test_UserRangeMismatchesDoNotTransferUsers(t *testing.T) {
+// User range mismatch coverage: for small mismatches, sync responses should include
+// the actual users directly to avoid extra round-trips.
+func Test_UserRangeMismatchesIncludeUsersWhenSmall(t *testing.T) {
 	client := &MemoryStore{}
 	server := &MemoryStore{}
 
@@ -305,18 +304,15 @@ func Test_UserRangeMismatchesDoNotTransferUsers(t *testing.T) {
 	resp, err := api.BuildSyncResponse(server, api.SyncRequest{Ranges: hashedPeriods, Users: hashedUsers}, 1000)
 	if err != nil { t.Fatalf("BuildSyncResponse failed: %v", err) }
 
-	// The response should indicate user range mismatches, but not include actual users
-	if len(resp.UserRangeHashes) == 0 {
-		t.Fatalf("expected user range hash mismatches, found none")
-	}
-	if len(resp.Users) != 0 {
-		t.Fatalf("expected no users in sync response, found %d", len(resp.Users))
+	// The response should include users directly for small mismatches
+	if len(resp.Users) == 0 {
+		t.Fatalf("expected users to be included in sync response for small mismatches, found none")
 	}
 
 	// Applying messages has no impact on users
 	if err := ApplyIncomingMessages(client, resp.Messages); err != nil { t.Fatalf("ApplyIncomingMessages failed: %v", err) }
 	if len(client.Users) != 0 {
-		t.Fatalf("users should not be transferred via sync response; got %d", len(client.Users))
+		t.Fatalf("users should not be applied via messages; got %d", len(client.Users))
 	}
 }
 

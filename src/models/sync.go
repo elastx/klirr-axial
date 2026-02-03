@@ -181,3 +181,27 @@ func CountMessagesByPeriod(db *gorm.DB, period Period) int64 {
 	db.Model(&Message{}).Where("created_at >= ? AND created_at < ?", period.Start, period.End).Count(&count)
 	return count
 }
+
+// CountUsersByFingerprintRange returns number of users whose fingerprint falls within [start, end].
+func CountUsersByFingerprintRange(db *gorm.DB, start, end string) (int64, error) {
+	var count int64
+	if err := db.Model(&User{}).
+		Where("fingerprint >= ?", start).
+		Where("fingerprint <= ?", end).
+		Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+// GetUsersByFingerprintRange lists users within [start, end], ordered by fingerprint.
+func GetUsersByFingerprintRange(db *gorm.DB, start, end string) ([]User, error) {
+	var users []User
+	if err := db.Where("fingerprint >= ?", start).
+		Where("fingerprint <= ?", end).
+		Order("fingerprint ASC").
+		Find(&users).Error; err != nil {
+		return nil, err
+	}
+	return users, nil
+}

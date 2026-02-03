@@ -60,7 +60,9 @@ func NextRequestFromHashes(store api.SyncStore, response api.SyncResponse) (peri
 			end := models.RealizeEnd(our.End)
 			for _, theirs := range response.Ranges {
 				if models.RealizeStart(theirs.Start) == start && models.RealizeEnd(theirs.End) == end && our.Hash != theirs.Hash {
-					periods = append(periods, theirs)
+					// Return OUR hashed period for the next request so the server can
+					// deterministically compare against its own and continue drill-down.
+					periods = append(periods, models.HashedPeriod{Period: our.Period, Hash: our.Hash})
 				}
 			}
 		}
@@ -73,7 +75,7 @@ func NextRequestFromHashes(store api.SyncStore, response api.SyncResponse) (peri
 			return nil, nil, err
 		}
 		if ourHash != ur.Hash {
-			users = append(users, ur)
+			users = append(users, models.HashedUsersRange{StringRange: ur.StringRange, Hash: ourHash})
 		}
 	}
 
