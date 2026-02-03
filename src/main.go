@@ -8,7 +8,6 @@ import (
 
 	"axial/api"
 	"axial/config"
-	"axial/database"
 	"axial/discovery"
 	"axial/models"
 )
@@ -26,7 +25,7 @@ func main() {
 	}
 
 	// Initialize database connection
-	err = database.Connect(cfg.Database)
+	err = models.InitDB(cfg.Database)
 	if err != nil {
 		panic(fmt.Errorf("failed to initialize database: %v", err))
 	}
@@ -34,12 +33,14 @@ func main() {
 	fmt.Printf("Starting node %s\n", nodeID)
 
 	// Calculate initial hash
-	hash, err := models.GetDatabaseHash(database.DB)
+	err = models.RefreshHashes(models.DB)
 	if err != nil {
 		panic(fmt.Errorf("failed to calculate database hash: %v", err))
 	}
-	models.UpdateHash(hash)
-	fmt.Printf("Node %s hash: %s\n", nodeID, hash)
+
+	hashes := models.GetHashes()
+
+	fmt.Printf("Node %s hash: %s\n", nodeID, hashes.Full)
 
 	// Create single multicast socket
 	connections, err := discovery.CreateMulticastSockets(cfg)
@@ -50,7 +51,7 @@ func main() {
 	for _, conn := range connections {
 		defer conn.Conn.Close()
 		go discovery.StartMulticastListener(cfg, &conn)
-		go discovery.StartBroadcast(cfg, hash, &conn)
+		go discovery.StartBroadcast(cfg, &conn)
 	}
 
 	// Register API routes

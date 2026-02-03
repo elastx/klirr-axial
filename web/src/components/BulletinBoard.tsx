@@ -7,11 +7,20 @@ import {
   TextInput,
   Textarea,
 } from "@mantine/core";
-import { IconArrowBack, IconMessageReply, IconSend } from "@tabler/icons-react";
+import {
+  IconArrowBack,
+  IconCheck,
+  IconMessageReply,
+  IconQuestionMark,
+  IconSend,
+  IconX,
+} from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { APIService } from "../services/api";
 import { Message } from "../types";
 import UserAvatar from "./avatar/UserAvatar";
+import { AxiosError } from "axios";
+import { GPGService } from "../services/gpg";
 
 interface NewPostProps {
   onSubmit: () => void;
@@ -21,24 +30,41 @@ interface NewPostProps {
 }
 
 function NewPost({ onSubmit, parentId, initialTopic, onCancel }: NewPostProps) {
+  const [errorMessage, setErrorMessage] = useState("");
   const [topic, setTopic] = useState(initialTopic || "");
   const [content, setContent] = useState("");
   const api = APIService.getInstance();
 
   const handleSubmit = async () => {
-    try {
-      await api.sendBulletinPost(topic, content, parentId);
-      setTopic("");
-      setContent("");
-      onSubmit();
-    } catch (error) {
-      console.error("Failed to send post:", error);
-    }
+    GPGService.getInstance()
+      .signMessage(content)
+      .then(async (signature) => {
+        return api
+          .sendBulletinPost(topic, content, signature, parentId)
+          .then(() => {
+            setTopic("");
+            setContent("");
+            onSubmit();
+          })
+          .catch((error: AxiosError) => {
+            let errorText = error.message;
+            const serverError = error.response?.data as string;
+            if (serverError) {
+              errorText = serverError;
+            }
+            setErrorMessage(errorText);
+          });
+      });
   };
 
   return (
     <Paper p="md" withBorder>
       <Stack>
+        {errorMessage && (
+          <Text color="red" size="sm">
+            {errorMessage}
+          </Text>
+        )}
         {!parentId && (
           <TextInput
             label="Topic"
@@ -82,13 +108,24 @@ interface PostProps {
 function Post({ post, posts, onReply }: PostProps) {
   // Find replies to this post
   const replies = posts.filter((p) => p.parent_id === post.id);
+  const [verificationStatus, setVerificationStatus] = useState<boolean | null>(
+    null
+  );
+
+  useEffect(() => {
+    GPGService.getInstance()
+      .verifyMessageSignature(post.content, post.signature, post.author)
+      .then((verified) => {
+        setVerificationStatus(verified);
+      });
+  }, [post]);
 
   return (
     <Paper p="md" withBorder>
       <Stack gap="xs">
         <Group justify="space-between">
           <Group>
-            <UserAvatar seed={post.fingerprint} size={50} />
+            <UserAvatar seed={post.author} size={50} />
             <div>
               <Text fw={500}>{post.topic}</Text>
               <Text size="sm" c="dimmed">
@@ -96,14 +133,23 @@ function Post({ post, posts, onReply }: PostProps) {
               </Text>
             </div>
           </Group>
-          <Button
-            variant="subtle"
-            size="sm"
-            leftSection={<IconMessageReply size={16} />}
-            onClick={() => onReply(post)}
-          >
-            Reply
-          </Button>
+          <Group>
+            {verificationStatus === true && (
+              <IconCheck size={16} color="green" />
+            )}
+            {verificationStatus === false && <IconX size={16} color="red" />}
+            {verificationStatus === null && (
+              <IconQuestionMark size={16} color="gray" />
+            )}
+            <Button
+              variant="subtle"
+              size="sm"
+              leftSection={<IconMessageReply size={16} />}
+              onClick={() => onReply(post)}
+            >
+              Reply
+            </Button>
+          </Group>
         </Group>
         <Text>{post.content}</Text>
         {replies.length > 0 && (

@@ -175,6 +175,37 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 
 # Notes
 
-## Considerations
-
+## Broadcast?
 Perhaps we shouldn't use broadcast (255.255.255.255). Raspberry Pi should work fine with multicast.
+
+## Mitigating spam
+
+### Messages
+Messages need to be signed by the author. Messages received in synchronization that are not signed by the author are ignored.
+
+### Users
+During synchronization, users that are not signed by known users are ignored.
+Only the first user on a node is allowed to post messages without being signed. This is, however, only a user interface
+restriction since a malicious actor could simply add them to their node's models.
+Other users can register and then be signed by other signed users, or the first user.
+Unsigned users are never synchronized to other nodes, except for if the same user is found to be signed on another node.
+If the same user is signed in one of two nodes but not the other, it would be considered a new user on the other node and
+the that node would update the signature status when it discovers the users by fingerprint. Since the ID hash includes
+the signature status, they would be lead to mismatching hashes until they are both signed with the same signature.
+There is need of a separate sync step for users that are signed by different other users:
+If the same user is signed by two different users, this is discovered when one of the nodes gets or sends that user to the remote.
+The node that discovers the discrepancy compares the age of the signing user and chooses the oldest one. If it had the newest one,
+it would sign the user with the oldest signature be done. If it had the oldest one, it would send its own version of the user to the remote and let it update its version.
+
+### Nodes
+For a node to be accepted during synchronization, its first user needs to be signed. If it's not, the node is added to a
+list of pending nodes. The first user of the node can then be signed by a signed user, and the node will be accepted from then on.
+The only exception is the new user signature reconciliation mentioned above. If the first user of a node is unsigned but the same
+user is signed on a remote node, that signature will be used to sign the same first user on the new node, and then the node will be accepted and eventually have earlier users be the first user of that node after synchronization is complete.
+
+### Problems?
+1. What if a malicious person creates a node with a bunch of spam data and then copies the first user of another node?
+Well, the spam messages are still not signed by any user of the signature chain of users, and would be ignored when received
+during synchronization.
+2. What if a malicious person creates a node with a bunch of spam data and then copies the first user of another node and signs it with a new user? Well the malicious person would have to have a signed account so that the new signed user is part of the signature chain. A malicious actor may set up hundreds of nodes but for those nodes to disrupt another network, they would have
+to be socially engineered into the other network. If the malicious actor is part of the network, they could disrupt it in other ways as well.

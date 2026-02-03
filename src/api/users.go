@@ -1,15 +1,12 @@
 package api
 
 import (
+	"axial/models"
 	"encoding/json"
 	"net/http"
-
-	"axial/database"
-	"axial/models"
 )
 
 type UserRegistration struct {
-	Fingerprint string `json:"fingerprint"`
 	PublicKey   string `json:"public_key"`
 }
 
@@ -20,13 +17,35 @@ func handleGetUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var users []models.User
-	if err := database.DB.Find(&users).Error; err != nil {
+	if err := models.DB.Find(&users).Error; err != nil {
 		http.Error(w, "Failed to fetch users", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(users)
+}
+
+func handleGetUser(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	fingerprint := r.PathValue("fingerprint")
+	if fingerprint == "" {
+		http.Error(w, "Fingerprint is required", http.StatusBadRequest)
+		return
+	}
+
+	var user models.User
+	if err := models.DB.Where("fingerprint = ?", fingerprint).First(&user).Error; err != nil {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
 }
 
 func handleRegisterUser(w http.ResponseWriter, r *http.Request) {
@@ -41,28 +60,18 @@ func handleRegisterUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate required fields
-	if reg.Fingerprint == "" || reg.PublicKey == "" {
-		http.Error(w, "Fingerprint and public key are required", http.StatusBadRequest)
-		return
-	}
-
-	// Check if user already exists
-	var existingUser models.User
-	if err := database.DB.Where("fingerprint = ?", reg.Fingerprint).First(&existingUser).Error; err == nil {
-		http.Error(w, "User already registered", http.StatusConflict)
-		return
-	}
-
 	user := models.User{
-		Fingerprint: reg.Fingerprint,
-		PublicKey:   reg.PublicKey,
+		CreateUser: models.CreateUser{
+			PublicKey: reg.PublicKey,
+		},
 	}
 
-	if err := database.DB.Create(&user).Error; err != nil {
+	if err := models.DB.Create(&user).Error; err != nil {
 		http.Error(w, "Failed to register user", http.StatusInternalServerError)
 		return
 	}
+
+	models.RefreshHashes(models.DB)
 
 	w.WriteHeader(http.StatusCreated)
 } 

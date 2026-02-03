@@ -4,17 +4,16 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"axial/database"
 	"axial/models"
 )
 
 type PingResponse struct {
-	Hash string `json:"hash"`
+	Hashes models.HashSet `json:"hash"`
 	IsBusy bool `json:"is_busy"`
 }
 
 func handlePing(w http.ResponseWriter, _ *http.Request) {
-	hash, err := models.GetDatabaseHash(database.DB)
+	hashes, err := models.GetDatabaseHashes(models.DB)
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
@@ -23,7 +22,7 @@ func handlePing(w http.ResponseWriter, _ *http.Request) {
 	isSyncing := models.IsSyncing()
 
 	response := PingResponse{
-		Hash: hash,
+		Hashes: hashes,
 		IsBusy: isSyncing,
 	}
 

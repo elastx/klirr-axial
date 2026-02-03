@@ -13,6 +13,9 @@ import { useState, useEffect } from "react";
 import { User, Message } from "../types";
 import { APIService } from "../services/api";
 
+// TODO: Sign or encrypt messages and store the signed or encrypted result in the contents field.
+// Remove the signature field from the model and the API.
+
 interface Conversation {
   user: User;
   messages: Message[];
@@ -123,19 +126,15 @@ function ConversationView({
                 p="sm"
                 withBorder
                 bg={
-                  msg.fingerprint === conversation.user.fingerprint
+                  msg.author === conversation.user.fingerprint
                     ? undefined
                     : "var(--mantine-color-dark-6)"
                 }
                 style={{
                   marginLeft:
-                    msg.fingerprint === conversation.user.fingerprint
-                      ? 0
-                      : "auto",
+                    msg.author === conversation.user.fingerprint ? 0 : "auto",
                   marginRight:
-                    msg.fingerprint === conversation.user.fingerprint
-                      ? "auto"
-                      : 0,
+                    msg.author === conversation.user.fingerprint ? "auto" : 0,
                   maxWidth: "80%",
                 }}
               >
@@ -144,7 +143,7 @@ function ConversationView({
                   size="xs"
                   c="dimmed"
                   ta={
-                    msg.fingerprint === conversation.user.fingerprint
+                    msg.author === conversation.user.fingerprint
                       ? "left"
                       : "right"
                   }

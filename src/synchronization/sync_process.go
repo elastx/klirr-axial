@@ -5,21 +5,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"slices"
 	"strings"
 	"time"
 
-	"axial/database"
+	"axial/api"
 	"axial/models"
+	"axial/remote"
 )
 
-func StartSync(node models.RemoteNode) error {
-	hash, err := models.GetDatabaseHash(database.DB)
+func StartSync(node remote.API, hash string) error {
+	hashes, err := models.GetDatabaseHashes(models.DB)
 	if err != nil {
 		return err
 	}
 
-	if hash == node.Hash {
+	if hashes.Full == hash {
 		return nil
 	}
 
@@ -28,16 +28,20 @@ func StartSync(node models.RemoteNode) error {
 	}
 	defer models.EndSync()
 
-	
-	periods := startingSyncRanges()
-	hashedPeriods, err := models.GenerateHashRanges(database.DB, periods)
+	periods, stringRanges := startingSyncRanges()
+	hashedPeriods, err := models.GenerateHashRanges(models.DB, periods)
 	if err != nil {
 		return err
 	}
-	
+
+	hashedUsers, err := models.GetUsersHashRanges(models.DB, stringRanges)
+	if err != nil {
+		return err
+	}
+
 	fmt.Printf("Synchronizing with %s\n", node.Address)
 
-	messages, err := Sync(node, hashedPeriods)
+	messages, err := Sync(node, hashedPeriods, hashedUsers)
 	if err != nil {
 		return err
 	}
@@ -45,25 +49,26 @@ func StartSync(node models.RemoteNode) error {
 	// Get the usersMap that sent the messages
 	usersMap := map[string]*models.User{}
 	for _, message := range messages {
-		user, err := database.GetUserByFingerprint(message.Author)
+		user, err := models.GetUserByFingerprint(message.Sender)
 		if err != nil {
 			return err
 		}
-		usersMap[user.Fingerprint] = user
+		usersMap[string(user.Fingerprint)] = user
 	}
+	if len(usersMap) == 0 {
+		usersList := []models.User{}
+		for _, user := range usersMap {
+			usersList = append(usersList, *user)
+		}
 
-	usersList := []models.User{}
-	for _, user := range usersMap {
-		usersList = append(usersList, *user)
+		SyncUsers(node, usersList)
+
+		// Sort messages by creation time
+		SortMessages(messages)
+
+		// Send messages unique to this node to the remote node
+		SyncMessages(node, messages)
 	}
-
-	SyncUsers(node, usersList)
-
-	// Sort messages by creation time
-	SortMessages(messages)
-
-	// Send messages unique to this node to the remote node
-	SyncMessages(node, messages)
 
 	return nil
 }
@@ -78,14 +83,13 @@ func SortMessages(messages []models.Message) {
 	}
 }
 
-func Sync(node models.RemoteNode, hashedPeriods []models.HashedPeriod) ([]models.Message, error) {
+func Sync(node remote.API, hashedPeriods []models.HashedPeriod, hashedUsers []models.HashedUsersRange) ([]models.Message, error) {
 	if len(hashedPeriods) == 0 {
 		fmt.Printf("No periods to sync with %s\n", node.Address)
 		return []models.Message{}, nil
 	}
 
-	
-	syncRequest := models.SyncRequest{
+	syncRequest := api.SyncRequest{
 		Ranges: hashedPeriods,
 	}
 
@@ -102,7 +106,7 @@ func Sync(node models.RemoteNode, hashedPeriods []models.HashedPeriod) ([]models
 	}
 	defer response.Body.Close()
 
-	var syncResponse models.SyncResponse
+	var syncResponse api.SyncResponse
 	err = json.NewDecoder(response.Body).Decode(&syncResponse)
 	if err != nil {
 		return []models.Message{}, fmt.Errorf("failed to decode sync response: %v", err)
@@ -118,16 +122,16 @@ func Sync(node models.RemoteNode, hashedPeriods []models.HashedPeriod) ([]models
 	messagesMissingInRemote := []models.Message{}
 
 	for _, messagesPeriod := range syncResponse.Messages {
-		ourMessages, err := models.GetMessagesByPeriod(database.DB, messagesPeriod.Period)
+		ourMessages, err := models.GetMessagesByPeriod(models.DB, messagesPeriod.Period)
 		if err != nil {
 			return []models.Message{}, fmt.Errorf("failed to get messages by period: %v", err)
 		}
 
 		for _, message := range messagesPeriod.Messages {
-			if !slices.Contains(ourMessages, message) {
+			if !message.In(ourMessages) {
 				fmt.Printf("Inserting message into our database: %+v\n", message)
 				// Insert message into our database
-				if err := database.DB.Create(&message).Error; err != nil {
+				if err := models.DB.Create(&message).Error; err != nil {
 					// Ignore duplicate key errors since those messages were already synced
 					if !strings.Contains(err.Error(), "duplicate key") {
 						return []models.Message{}, err
@@ -137,7 +141,7 @@ func Sync(node models.RemoteNode, hashedPeriods []models.HashedPeriod) ([]models
 		}
 
 		for _, message := range ourMessages {
-			if !slices.Contains(messagesPeriod.Messages, message) {
+			if !message.In(messagesPeriod.Messages) {
 				messagesMissingInRemote = append(messagesMissingInRemote, message)
 			}
 		}
@@ -148,11 +152,10 @@ func Sync(node models.RemoteNode, hashedPeriods []models.HashedPeriod) ([]models
 		periodsForRemoteHashes = append(periodsForRemoteHashes, hashedPeriod.Period)
 	}
 
-	ourHashes, err := models.GenerateHashRanges(database.DB, periodsForRemoteHashes)
+	ourHashes, err := models.GenerateHashRanges(models.DB, periodsForRemoteHashes)
 	if err != nil {
 		return []models.Message{}, fmt.Errorf("failed to generate hash ranges: %v", err)
 	}
-
 
 	hashedPeriodsToCheck := []models.HashedPeriod{}
 
@@ -168,89 +171,96 @@ func Sync(node models.RemoteNode, hashedPeriods []models.HashedPeriod) ([]models
 		}
 	}
 
-	newMessagesMissingInRemote, err := Sync(node, hashedPeriodsToCheck)
+	userRangesToCheck := []models.HashedUsersRange{}
+
+	for _, hashedUserRange := range syncResponse.UserRangeHashes {
+		ourUserHash, err := models.GetUsersHashByFingerprintRange(models.DB, hashedUserRange.Start, hashedUserRange.End)
+		if err != nil {
+			return []models.Message{}, fmt.Errorf("failed to get users by fingerprint range: %v", err)
+		}
+
+		if ourUserHash != hashedUserRange.Hash {
+			userRangesToCheck = append(userRangesToCheck, hashedUserRange)
+		}
+
+	}
+
+	newMessagesMissingInRemote, err := Sync(node, hashedPeriodsToCheck, userRangesToCheck)
 	if err != nil {
 		return []models.Message{}, fmt.Errorf("failed to sync new messages missing in remote: %v", err)
 	}
 
 	messagesMissingInRemote = append(messagesMissingInRemote, newMessagesMissingInRemote...)
-	
+
 	return messagesMissingInRemote, nil
 }
 
-func startingSyncRanges() []models.Period {
+func startingSyncRanges() ([]models.Period, []models.StringRange) {
 
 	earliestStartTime := models.RealizeStart(nil)
 	latestEndTime := models.RealizeEnd(nil)
 
-	periods := []models.Period{}
-	// The current week starting on monday
+	periodSteps := []struct {
+		Years  int `json:"years"`
+		Months int `json:"months"`
+		Days   int `json:"days"`
+	}{
+		{0, -1, 0},
+		{0, -6, 0},
+		{-2, 0, 0},
+	}
+	var previousStart *time.Time
 	weekStart := getWeekStart()
 	if weekStart.Before(earliestStartTime) {
-		return []models.Period{
-			{
+		previousStart = &earliestStartTime
+	} else {
+		previousStart = &weekStart
+	}
+
+	periods := []models.Period{
+		{
+			Start: previousStart,
+			End:   &latestEndTime,
+		},
+	}
+
+	for _, step := range periodSteps {
+		start := previousStart.AddDate(step.Years, step.Months, step.Days)
+		if start.Before(earliestStartTime) {
+			periods = append(periods, models.Period{
 				Start: &earliestStartTime,
-				End: &latestEndTime,
-			},
+				End:   previousStart,
+			})
+			break
 		}
-	}
-	periods = append(periods, models.Period{
-		Start: &weekStart,
-		End: &latestEndTime,
-	})
-
-	// The month before the current week
-	monthStart := weekStart.AddDate(0, -1, 0)
-	if monthStart.Before(earliestStartTime) {
 		periods = append(periods, models.Period{
-			Start: &earliestStartTime,
-			End: &monthStart,
+			Start: &start,
+			End:   previousStart,
 		})
-		return periods
+		previousStart = &start
 	}
 
-	periods = append(periods, models.Period{
-		Start: &monthStart,
-		End:   &weekStart,
-	})
-
-	// The 6 months before that month
-	sixMonths := monthStart.AddDate(0, -6, 0)
-	if sixMonths.Before(earliestStartTime) {
-		periods = append(periods, models.Period{
-			Start: &earliestStartTime,
-			End: &sixMonths,
-		})
-		return periods
-	}
-	periods = append(periods, models.Period{
-		Start: &sixMonths,
-		End:   &monthStart,
-	})
-
-	// Two years before that six months
-	twoYears := sixMonths.AddDate(-2, 0, 0)
-	if twoYears.Before(earliestStartTime) {
-		periods = append(periods, models.Period{
-			Start: &earliestStartTime,
-			End: &twoYears,
-		})
-		return periods
-	}
-	periods = append(periods, models.Period{
-		Start: &twoYears,
-		End:   &sixMonths,
-	})
-
-	// Everything before that
 	periods = append(periods, models.Period{
 		Start: &earliestStartTime,
-		End:   &twoYears,
+		End:   previousStart,
 	})
 
-	return periods
+	// Generate user fingerprint ranges, an array of 0-9 and a-z
+	var userRanges []models.StringRange
+	for i := 0; i < 10; i++ {
+		userRanges = append(userRanges, models.StringRange{
+			Start: string('0' + i),
+			End:   string('0' + i + 1),
+		})
+	}
+	for i := 0; i < 25; i++ {
+		userRanges = append(userRanges, models.StringRange{
+			Start: string('a' + i),
+			End:   string('a' + i + 1),
+		})
+	}
+	return periods, userRanges
 }
-
 
 func getWeekStart() time.Time {
 	now := time.Now()

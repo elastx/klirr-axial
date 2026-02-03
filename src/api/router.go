@@ -43,6 +43,15 @@ func RegisterRoutes() {
 	http.HandleFunc("/v1/sync/users", handleSyncUsers)
 
 	// User routes
+	http.HandleFunc("/v1/users/{fingerprint}", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("User endpoint: %s %s", r.Method, r.URL.Path)
+		if r.Method == http.MethodGet {
+			handleGetUser(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
 	http.HandleFunc("/v1/users", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Users endpoint: %s %s", r.Method, r.URL.Path)
 		switch r.Method {
@@ -55,6 +64,7 @@ func RegisterRoutes() {
 		}
 	}))
 
+
 	// Message routes
 	http.HandleFunc("/v1/messages", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Messages endpoint: %s %s", r.Method, r.URL.Path)
@@ -64,16 +74,6 @@ func RegisterRoutes() {
 		case http.MethodPost:
 			handleCreateMessage(w, r)
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	}))
-
-	// Topics route
-	http.HandleFunc("/v1/topics", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("Topics endpoint: %s %s", r.Method, r.URL.Path)
-		if r.Method == http.MethodGet {
-			handleGetTopics(w, r)
-		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	}))

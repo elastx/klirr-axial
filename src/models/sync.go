@@ -8,16 +8,11 @@ import (
 	"gorm.io/gorm"
 )
 
-type RemoteNode struct {
-	Hash string `json:"hash"`
-	Address string `json:"base_url"`
-}
-
 // SyncState manages the synchronization state
 type SyncState struct {
 	mu        sync.RWMutex
 	isSyncing bool
-	hash      string
+	hashes      HashSet
 }
 
 var (
@@ -48,7 +43,7 @@ func RealizeEnd(end *time.Time) time.Time {
 // HashedPeriod represents a time period and its hash
 type HashedPeriod struct {
 	Period
-	Hash  string     `json:"hash"`
+	Hash string `json:"hash"`
 }
 
 type MessagesPeriod struct {
@@ -56,34 +51,26 @@ type MessagesPeriod struct {
 	Messages []Message `json:"messages"`
 }
 
-// type UsersRange struct {
-// 	Start string `json:"start"`
-// 	End   string `json:"end"`
-// }
-
-// type HashedUsersRange struct {
-// 	UsersRange
-// 	Hash  string `json:"hash"`
-// }
-
-// type ListUsersRange struct {
-// 	UsersRange
-// 	Users  []User `json:"users"`
-// }
-
-// SyncRequest represents a request to sync data
-type SyncRequest struct {
-	Ranges []HashedPeriod `json:"ranges"`
+type StringRange struct {
+	Start string `json:"start"`
+	End   string `json:"end"`
 }
 
-// SyncResponse can either contain data or more ranges to check
-type SyncResponse struct {
-	Hash     string         `json:"hash"`
-	IsBusy   bool           `json:"is_busy"`
-	Ranges   []HashedPeriod `json:"ranges,omitempty"`
-	Messages []MessagesPeriod `json:"messages,omitempty"`
-	// Users    []User         `json:"users,omitempty"`
+type UsersRange struct {
+	StringRange
+	Users  []User `json:"users"`
 }
+
+type HashedUsersRange struct {
+	StringRange
+	Hash  string `json:"hash"`
+}
+
+type ListUsersRange struct {
+	StringRange
+	Users  []User `json:"users"`
+}
+
 
 // StartSync attempts to start a sync operation
 func StartSync() bool {
@@ -112,18 +99,18 @@ func IsSyncing() bool {
 	return syncState.isSyncing
 }
 
-// UpdateHash updates the current database hash
-func UpdateHash(hash string) {
+// UpdateHashes updates the current database hash
+func UpdateHashes(hash HashSet) {
 	syncState.mu.Lock()
 	defer syncState.mu.Unlock()
-	syncState.hash = hash
+	syncState.hashes = hashes
 }
 
-// GetHash returns the current database hash
-func GetHash() string {
+// GetHashes returns the current database hash
+func GetHashes() HashSet {
 	syncState.mu.RLock()
 	defer syncState.mu.RUnlock()
-	return syncState.hash
+	return syncState.hashes
 }
 
 // GenerateHashRanges creates the standard set of time ranges to check
@@ -139,9 +126,23 @@ func GenerateHashRanges(db *gorm.DB, periods []Period) ([]HashedPeriod, error) {
 			Hash:   hash,
 		})
 	}
-
 	return hashedPeriods, nil
+}
 
+func GetUsersHashRanges(db *gorm.DB, stringRanges []StringRange) ([]HashedUsersRange, error) {
+	hashedRanges := []HashedUsersRange{}
+	for _, stringRange := range stringRanges {
+		hash, err := GetUsersHashByFingerprintRange(db, stringRange.Start, stringRange.End)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get users hash: %v", err)
+		}
+		hashedRanges = append(hashedRanges, HashedUsersRange{
+			StringRange: stringRange,
+			Hash:        hash,
+		})
+	}
+
+	return hashedRanges, nil
 }
 
 // SplitTimeRange splits a time range into n equal parts

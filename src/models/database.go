@@ -1,4 +1,4 @@
-package database
+package models
 
 import (
 	"errors"
@@ -11,7 +11,6 @@ import (
 	"gorm.io/gorm/logger"
 
 	"axial/config"
-	"axial/models"
 )
 
 var DB *gorm.DB
@@ -20,8 +19,8 @@ const (
 	UniqueViolationErr = "23505"
 )
 
-// Connect establishes a connection to the database and performs migrations
-func Connect(cfg config.DatabaseConfig) error {
+// InitDB establishes a connection to the database and performs migrations
+func InitDB(cfg config.DatabaseConfig) error {
 	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Name)
 
@@ -38,7 +37,7 @@ func Connect(cfg config.DatabaseConfig) error {
 
 	log.Println("Running migrations...")
 	// Run migrations
-	if err := DB.AutoMigrate(&models.User{}, &models.Message{}); err != nil {
+	if err := DB.AutoMigrate(&User{}, &Message{}); err != nil {
 		return fmt.Errorf("failed to run migrations: %v", err)
 	}
 
@@ -66,10 +65,8 @@ func Connect(cfg config.DatabaseConfig) error {
 	return nil
 } 
 
-
-
-func GetUserByFingerprint(fingerprint string) (*models.User, error) {
-	var user models.User
+func GetUserByFingerprint(fingerprint Fingerprint) (*User, error) {
+	var user User
 	if err := DB.Where("fingerprint = ?", fingerprint).First(&user).Error; err != nil {
 		return nil, err
 	}

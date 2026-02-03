@@ -31,6 +31,11 @@ export class APIService {
     return response.data || [];
   }
 
+  async getUser(fingerprint: string): Promise<User> {
+    const response = await axios.get(`/users/${fingerprint}`);
+    return response.data;
+  }
+
   async registerUser(userInfo: UserInfo): Promise<void> {
     await axios.post("/users", {
       fingerprint: userInfo.fingerprint,
@@ -60,6 +65,7 @@ export class APIService {
   async sendBulletinPost(
     topic: string,
     content: string,
+    signature: string,
     parentId?: number
   ): Promise<void> {
     const currentFingerprint = this.gpg.getCurrentFingerprint();
@@ -70,7 +76,8 @@ export class APIService {
     await axios.post("/messages", {
       topic,
       content,
-      fingerprint: currentFingerprint,
+      author: currentFingerprint,
+      signature,
       type: "bulletin",
       parent_id: parentId,
     });
@@ -103,9 +110,7 @@ export class APIService {
         // If we're the sender, group by recipient
         // If we're the recipient, group by sender
         const key =
-          msg.fingerprint === currentFingerprint
-            ? msg.recipient!
-            : msg.fingerprint;
+          msg.author === currentFingerprint ? msg.recipient! : msg.author;
         if (!conversations.has(key)) {
           conversations.set(key, []);
         }

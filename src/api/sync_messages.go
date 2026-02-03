@@ -1,11 +1,9 @@
 package api
 
 import (
+	"axial/models"
 	"encoding/json"
 	"net/http"
-
-	"axial/database"
-	"axial/models"
 )
 
 type SyncMessagesRequest struct {
@@ -32,15 +30,17 @@ func handleSyncMessages(w http.ResponseWriter, r *http.Request) {
 
 	// Create messages
 	for _, message := range req.Messages {
-		if err := database.DB.Create(&message).Error; err != nil {
+		if err := models.DB.Create(&message).Error; err != nil {
 			// Ignore duplicate errors
-			if database.IsDuplicateError(err) {
+			if models.IsDuplicateError(err) {
 				continue
 			}
 			http.Error(w, "Failed to create message", http.StatusInternalServerError)
 			return
 		}
 	}
+
+	models.RefreshHashes(models.DB)
 
 	w.WriteHeader(http.StatusCreated)
 

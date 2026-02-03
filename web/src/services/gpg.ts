@@ -1,5 +1,6 @@
 import * as openpgp from "openpgp";
-import { KeyPair } from "../types";
+import { KeyPair, User } from "../types";
+import { APIService } from "./api";
 
 const STORAGE_KEY = "axial_gpg_key";
 
@@ -209,6 +210,54 @@ export class GPGService {
     });
 
     return encrypted as string;
+  }
+
+  async signMessage(message: string): Promise<string> {
+    if (!this.currentKeyPair) {
+      throw new Error("No private key loaded");
+    }
+
+    const privateKey = await openpgp.readPrivateKey({
+      armoredKey: this.currentKeyPair.privateKey,
+    });
+
+    const signed = await openpgp.sign({
+      message: await openpgp.createMessage({ text: message }),
+      signingKeys: privateKey,
+      detached: true,
+      format: "armored",
+    });
+
+    return signed as string;
+  }
+
+  async verifyMessageSignature(
+    message: string,
+    signature: string,
+    signerFingerprint: string
+  ): Promise<boolean> {
+    const apiService = APIService.getInstance();
+    console.log("signature", signature);
+    return Promise.all([
+      openpgp.createMessage({ text: message }),
+      openpgp.readSignature({ armoredSignature: signature }),
+      apiService
+        .getUser(signerFingerprint)
+        .then((user: User) => user.public_key)
+        .then((publicKey: string) =>
+          openpgp.readKey({ armoredKey: publicKey })
+        ),
+    ]).then(([message, signature, verificationKey]) =>
+      openpgp
+        .verify({
+          message: message,
+          signature: signature,
+          verificationKeys: verificationKey,
+        })
+        .then((verified) => {
+          return verified.signatures[0].verified;
+        })
+    );
   }
 
   getCurrentFingerprint(): string | null {

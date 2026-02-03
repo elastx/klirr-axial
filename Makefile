@@ -1,7 +1,10 @@
 CLUSTER_NAME := axial
 
 # Development environment with PostgreSQL and Go app
-src/axial: src/frontend/dist
+# Rebuild Go binary when any Go files (or go.mod/go.sum) change
+GO_SOURCES := $(shell find src -type f -name '*.go')
+
+src/axial: src/frontend/dist $(GO_SOURCES) src/go.mod src/go.sum
 	@echo "Building Go application..."
 	@cd src && go build -o axial
 

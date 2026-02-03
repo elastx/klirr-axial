@@ -1,7 +1,6 @@
 package api
 
 import (
-	"axial/database"
 	"axial/models"
 	"encoding/json"
 	"net/http"
@@ -31,15 +30,17 @@ func handleSyncUsers(w http.ResponseWriter, r *http.Request) {
 
 	// Create users
 	for _, user := range req.Users {
-		if err := database.DB.Create(&user).Error; err != nil {
+		if err := models.DB.Create(&user).Error; err != nil {
 			// Ignore duplicate errors
-			if database.IsDuplicateError(err) {
+			if models.IsDuplicateError(err) {
 				continue
 			}
 			http.Error(w, "Failed to create user", http.StatusInternalServerError)
 			return
 		}
 	}
+
+	models.RefreshHashes(models.DB)
 
 	w.WriteHeader(http.StatusCreated)
 

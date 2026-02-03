@@ -10,8 +10,8 @@ import (
 	"golang.org/x/net/ipv4"
 
 	"axial/config"
-	"axial/database"
 	"axial/models"
+	"axial/remote"
 	"axial/synchronization"
 )
 
@@ -269,21 +269,21 @@ func StartMulticastListener(cfg config.Config, conn *MulticastConnection) {
 			// axial.local|74d63e48f0e18e7c300904b49457a630ec782c244fb212273742ce1499cd21ef|:8080|0.0.0.0 (from 192.168.1.207:45678)
 			if !models.IsSyncing() {
 				hash := parts[1]
-				ourHash, err := models.GetDatabaseHash(database.DB)
+				ourHashes := models.GetHashes()
 				if err != nil {
 					fmt.Printf("Failed to get database hash: %v\n", err)
 					continue
 				}
+				ourHash := ourHashes.Full
 
 				if hash != ourHash {
 					fmt.Printf("Mismatching hash from %s: %s != %s\n", src, hash, ourHash)
 					port := parts[2]
-					remoteNode := models.RemoteNode{
-						Hash: hash,
+					remoteNode := remote.API{
 						Address: fmt.Sprintf("%s%s", src.IP, port),
 					}
 					
-					err := synchronization.StartSync(remoteNode)
+					err := synchronization.StartSync(remoteNode, hash)
 					if err != nil {
 						fmt.Printf("Failed to start sync: %v\n", err)
 					} else {
@@ -303,12 +303,11 @@ func StartMulticastListener(cfg config.Config, conn *MulticastConnection) {
 	}
 }
 
-func StartBroadcast(cfg config.Config, hash string, conn *MulticastConnection) {
+func StartBroadcast(cfg config.Config,conn *MulticastConnection) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	addr := fmt.Sprintf(":%d", cfg.APIPort)
-	message := fmt.Sprintf("%s|%s|%s|%s", cfg.NodeID, hash, addr, conn.localIP)
 
 	targetAddr := net.UDPAddr{
 		IP:   net.IPv4(255, 255, 255, 255),
@@ -318,6 +317,8 @@ func StartBroadcast(cfg config.Config, hash string, conn *MulticastConnection) {
 	fmt.Printf("Starting broadcast from %s to %s:%d\n", conn.localIP, targetAddr.IP, targetAddr.Port)
 
 	for range ticker.C {
+		hashes := models.GetHashes()
+		message := fmt.Sprintf("%s|%s|%s|%s", cfg.NodeID, hashes.Full, addr, conn.localIP)
 		_, err := conn.Conn.WriteToUDP([]byte(message), &targetAddr)
 		if err != nil {
 			fmt.Printf("Error sending broadcast message: %v\n", err)
