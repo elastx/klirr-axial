@@ -62,7 +62,7 @@ func (m *Message) Hash() string {
 }
 
 // BeforeCreate is called by GORM before creating a new message
-func (m *Message) BeforeCreate(*gorm.DB) error {
+func (m *Message) BeforeCreate(tx *gorm.DB) error {
 	sender, recipients, encrypted, signed, err := m.Content.Analyze()
 	if err != nil {
 		return err
@@ -111,7 +111,8 @@ func (m *Message) BeforeCreate(*gorm.DB) error {
 		m.Recipients = recipients
 	}
 
-	m.Base.BeforeCreate(m.Hash())
+	m.Base.ID = m.Hash()
+	m.Base.BeforeCreate(tx)
 
 	return nil
 }

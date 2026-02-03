@@ -57,3 +57,10 @@ web/node_modules:
 
 src/frontend/dist: web/node_modules
 	cd web && npm install && npm run build
+
+
+.PHONY: test
+test:
+	@echo "Running tests..."
+	@cd src && go test ./... -v
+	@cd web && npm test

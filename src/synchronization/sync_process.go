@@ -13,6 +13,46 @@ import (
 	"axial/remote"
 )
 
+// SyncRequester abstracts how a sync request is sent to a remote node.
+// Production uses HTTP; tests can provide an in-memory implementation to
+// simulate back-and-forth exchanges without network or servers.
+type SyncRequester interface {
+	RequestSync(node remote.API, req api.SyncRequest) (api.SyncResponse, error)
+}
+
+// httpSyncRequester implements SyncRequester over HTTP to the node's address.
+type httpSyncRequester struct {
+	Client *http.Client
+}
+
+func (h httpSyncRequester) RequestSync(node remote.API, req api.SyncRequest) (api.SyncResponse, error) {
+	jsonRequest, err := json.Marshal(req)
+	if err != nil {
+		return api.SyncResponse{}, err
+	}
+
+	response, err := h.httpPost(node, jsonRequest)
+	if err != nil {
+		return api.SyncResponse{}, fmt.Errorf("failed to send sync request: %v", err)
+	}
+	defer response.Body.Close()
+
+	var syncResponse api.SyncResponse
+	err = json.NewDecoder(response.Body).Decode(&syncResponse)
+	if err != nil {
+		return api.SyncResponse{}, fmt.Errorf("failed to decode sync response: %v", err)
+	}
+	return syncResponse, nil
+}
+
+func (h httpSyncRequester) httpPost(node remote.API, jsonRequest []byte) (*http.Response, error) {
+	client := h.Client
+	if client == nil {
+		client = http.DefaultClient
+	}
+	return client.Post(fmt.Sprintf("http://%s/v1/sync", node.Address), "application/json", bytes.NewBuffer(jsonRequest))
+}
+
 func StartSync(node remote.API, hash string) error {
 	hashes, err := models.GetDatabaseHashes(models.DB)
 	if err != nil {
@@ -41,6 +81,7 @@ func StartSync(node remote.API, hash string) error {
 
 	fmt.Printf("Synchronizing with %s\n", node.Address)
 
+	// Use HTTP requester by default in production flows.
 	messages, err := Sync(node, hashedPeriods, hashedUsers)
 	if err != nil {
 		return err
@@ -83,7 +124,18 @@ func SortMessages(messages []models.Message) {
 	}
 }
 
+// Sync performs one round of synchronization with a remote node using the provided
+// hash ranges. It returns messages present locally but missing in the remote.
+//
+// For unit tests, prefer calling SyncWithRequester with a custom requester that
+// uses in-memory handlers to return api.SyncResponse.
 func Sync(node remote.API, hashedPeriods []models.HashedPeriod, hashedUsers []models.HashedUsersRange) ([]models.Message, error) {
+	return SyncWithRequester(httpSyncRequester{}, node, hashedPeriods, hashedUsers)
+}
+
+// SyncWithRequester is identical to Sync but allows the caller to provide a
+// pluggable requester for testability.
+func SyncWithRequester(requester SyncRequester, node remote.API, hashedPeriods []models.HashedPeriod, hashedUsers []models.HashedUsersRange) ([]models.Message, error) {
 	if len(hashedPeriods) == 0 {
 		fmt.Printf("No periods to sync with %s\n", node.Address)
 		return []models.Message{}, nil
@@ -93,23 +145,11 @@ func Sync(node remote.API, hashedPeriods []models.HashedPeriod, hashedUsers []mo
 		Ranges: hashedPeriods,
 	}
 
-	jsonRequest, err := json.Marshal(syncRequest)
+	// Let the requester handle the transport (HTTP in prod, in-memory in tests).
+	fmt.Printf("Sending sync request to %s\n", node.Address)
+	syncResponse, err := requester.RequestSync(node, syncRequest)
 	if err != nil {
 		return []models.Message{}, err
-	}
-
-	fmt.Printf("Sending sync request to %s: %s\n", node.Address, string(jsonRequest))
-
-	response, err := http.Post(fmt.Sprintf("http://%s/v1/sync", node.Address), "application/json", bytes.NewBuffer(jsonRequest))
-	if err != nil {
-		return []models.Message{}, fmt.Errorf("failed to send sync request: %v", err)
-	}
-	defer response.Body.Close()
-
-	var syncResponse api.SyncResponse
-	err = json.NewDecoder(response.Body).Decode(&syncResponse)
-	if err != nil {
-		return []models.Message{}, fmt.Errorf("failed to decode sync response: %v", err)
 	}
 
 	fmt.Printf("Received sync response from %s: %+v\n", node.Address, syncResponse)
@@ -157,19 +197,7 @@ func Sync(node remote.API, hashedPeriods []models.HashedPeriod, hashedUsers []mo
 		return []models.Message{}, fmt.Errorf("failed to generate hash ranges: %v", err)
 	}
 
-	hashedPeriodsToCheck := []models.HashedPeriod{}
-
-	for _, ourHash := range ourHashes {
-		start := models.RealizeStart(ourHash.Start)
-		end := models.RealizeEnd(ourHash.End)
-		for _, theirHash := range syncResponse.Ranges {
-			theirStart := models.RealizeStart(theirHash.Start)
-			theirEnd := models.RealizeEnd(theirHash.End)
-			if theirStart == start && theirEnd == end && theirHash.Hash != ourHash.Hash {
-				hashedPeriodsToCheck = append(hashedPeriodsToCheck, theirHash)
-			}
-		}
-	}
+	hashedPeriodsToCheck := mismatchedPeriods(ourHashes, syncResponse.Ranges)
 
 	userRangesToCheck := []models.HashedUsersRange{}
 
@@ -185,7 +213,7 @@ func Sync(node remote.API, hashedPeriods []models.HashedPeriod, hashedUsers []mo
 
 	}
 
-	newMessagesMissingInRemote, err := Sync(node, hashedPeriodsToCheck, userRangesToCheck)
+	newMessagesMissingInRemote, err := SyncWithRequester(requester, node, hashedPeriodsToCheck, userRangesToCheck)
 	if err != nil {
 		return []models.Message{}, fmt.Errorf("failed to sync new messages missing in remote: %v", err)
 	}
@@ -193,6 +221,25 @@ func Sync(node remote.API, hashedPeriods []models.HashedPeriod, hashedUsers []mo
 	messagesMissingInRemote = append(messagesMissingInRemote, newMessagesMissingInRemote...)
 
 	return messagesMissingInRemote, nil
+}
+
+// mismatchedPeriods returns the set of hashed periods from the remote that
+// correspond to the same concrete time ranges as ours but have different
+// content hashes.
+func mismatchedPeriods(our []models.HashedPeriod, theirs []models.HashedPeriod) []models.HashedPeriod {
+	out := []models.HashedPeriod{}
+	for _, ourHash := range our {
+		start := models.RealizeStart(ourHash.Start)
+		end := models.RealizeEnd(ourHash.End)
+		for _, theirHash := range theirs {
+			theirStart := models.RealizeStart(theirHash.Start)
+			theirEnd := models.RealizeEnd(theirHash.End)
+			if theirStart == start && theirEnd == end && theirHash.Hash != ourHash.Hash {
+				out = append(out, theirHash)
+			}
+		}
+	}
+	return out
 }
 
 func startingSyncRanges() ([]models.Period, []models.StringRange) {
@@ -249,14 +296,14 @@ func startingSyncRanges() ([]models.Period, []models.StringRange) {
 	var userRanges []models.StringRange
 	for i := 0; i < 10; i++ {
 		userRanges = append(userRanges, models.StringRange{
-			Start: string('0' + i),
-			End:   string('0' + i + 1),
+			Start: fmt.Sprintf("%c", '0'+i),
+			End:   fmt.Sprintf("%c", '0'+i+1),
 		})
 	}
 	for i := 0; i < 25; i++ {
 		userRanges = append(userRanges, models.StringRange{
-			Start: string('a' + i),
-			End:   string('a' + i + 1),
+			Start: fmt.Sprintf("%c", 'a'+i),
+			End:   fmt.Sprintf("%c", 'a'+i+1),
 		})
 	}
 	return periods, userRanges
