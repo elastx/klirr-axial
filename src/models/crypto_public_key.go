@@ -1,6 +1,8 @@
 package models
 
 import (
+	"strings"
+
 	"github.com/ProtonMail/gopenpgp/v2/crypto"
 )
 
@@ -55,4 +57,33 @@ func (pk* PublicKey) GetEncryptionFingerprints() (Fingerprints, error) {
 		}
 	}
 	return fps, nil
+}
+
+// GetCanonicalEncryptionFingerprint selects the canonical encryption key ID.
+// Preference order:
+// 1. First encryption recipient key ID returned by gopenpgp (stable order)
+// 2. Fallback to the primary key ID if encryption IDs are unavailable
+// The returned value is normalized to lowercase.
+func (pk* PublicKey) GetCanonicalEncryptionFingerprint() (Fingerprint, error) {
+	key, err := pk.PGP()
+	if err != nil {
+		return "", err
+	}
+
+	// Try encryption recipients
+	kr, err := crypto.NewKeyRing(key)
+	if err != nil {
+		return "", err
+	}
+	pm := crypto.NewPlainMessage([]byte("probe"))
+	encMsg, err := kr.Encrypt(pm, nil)
+	if err == nil {
+		ids, _ := encMsg.GetHexEncryptionKeyIDs()
+		if len(ids) > 0 && ids[0] != "" {
+			return Fingerprint(strings.ToLower(ids[0])), nil
+		}
+	}
+
+	// Fallback to primary key ID
+	return Fingerprint(strings.ToLower(key.GetHexKeyID())), nil
 }

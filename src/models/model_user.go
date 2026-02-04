@@ -31,14 +31,11 @@ func (u *User) Hash() string {
 
 func (u *User) BeforeCreate(tx *gorm.DB) error {
 	pubKey := u.GetPublicKey()
-	encFPs, err := pubKey.GetEncryptionFingerprints()
+	canonicalFP, err := pubKey.GetCanonicalEncryptionFingerprint()
 	if err != nil {
 		return err
 	}
-	if len(encFPs) == 0 {
-		return fmt.Errorf("no encryption key id found for public key")
-	}
-	canonical := strings.ToLower(string(encFPs[0]))
+	canonical := strings.ToLower(string(canonicalFP))
 
 	// Validate supplied fingerprint if present
 	if u.Fingerprint != "" && strings.ToLower(u.Fingerprint) != canonical {
