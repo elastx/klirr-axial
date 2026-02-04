@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"strings"
 
 	"gorm.io/gorm"
 )
@@ -15,12 +16,8 @@ type CreateUser struct {
 type User struct {
 	Base
 	CreateUser
-	// Primary fingerprint retained for compatibility; represents canonical signing key ID
-	Fingerprint string    `json:"fingerprint" gorm:"uniqueIndex"`
-	// Explicit signing key ID (often same as primary)
-	SigningFingerprint string `json:"signing_fingerprint" gorm:"column:signing_fingerprint;index"`
-	// All encryption subkey IDs for this user
-	EncryptionFingerprints Fingerprints `json:"encryption_fingerprints,omitempty" gorm:"column:encryption_fingerprints;type:jsonb"`
+	// Canonical fingerprint: encryption subkey KeyID (16-hex, lowercase)
+	Fingerprint string `json:"fingerprint" gorm:"uniqueIndex"`
 }
 
 // Gorm setup
@@ -33,28 +30,22 @@ func (u *User) Hash() string {
 }
 
 func (u *User) BeforeCreate(tx *gorm.DB) error {
-
 	pubKey := u.GetPublicKey()
-	// Derive signing and encryption fingerprints from the supplied public key
-	signingFP, err := pubKey.GetSigningFingerprint()
-	if err != nil {
-		return err
-	}
 	encFPs, err := pubKey.GetEncryptionFingerprints()
 	if err != nil {
 		return err
 	}
+	if len(encFPs) == 0 {
+		return fmt.Errorf("no encryption key id found for public key")
+	}
+	canonical := strings.ToLower(string(encFPs[0]))
 
-	// Check for data manipulation during sync
-	if u.Fingerprint != "" && u.GetFingerprint() != signingFP {
-		return fmt.Errorf("supplied fingerprint does not match public key")
-	} else {
-		u.SetFingerprint(signingFP)
+	// Validate supplied fingerprint if present
+	if u.Fingerprint != "" && strings.ToLower(u.Fingerprint) != canonical {
+		return fmt.Errorf("supplied fingerprint does not match encryption key id")
 	}
 
-	// Populate extended fingerprint fields
-	u.SigningFingerprint = string(signingFP)
-	u.EncryptionFingerprints = encFPs
+	u.Fingerprint = canonical
 
 	u.Base.ID = u.Hash()
 	u.Base.BeforeCreate(tx)
