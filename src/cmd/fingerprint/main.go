@@ -33,12 +33,18 @@ func main() {
     }
 
     pk := models.PublicKey(armored)
+    // Prefer encryption subkey KeyID; fallback to primary/signing key ID
+    if encFps, err := pk.GetEncryptionFingerprints(); err == nil && len(encFps) > 0 {
+        // Use the first encryption recipient ID deterministically
+        fmt.Println(strings.ToLower(string(encFps[0])))
+        return
+    }
+
+    // Fallback: primary/signing key ID
     fp, err := pk.GetFingerprint()
     if err != nil {
         fmt.Fprintln(os.Stderr, "failed to parse public key:", err)
         os.Exit(2)
     }
-
-    // Print backend fingerprint (hex key ID)
-    fmt.Println(string(fp))
+    fmt.Println(strings.ToLower(string(fp)))
 }

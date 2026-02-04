@@ -19,16 +19,17 @@ export class GPGService {
     publicKey: openpgp.Key,
   ): Promise<string> {
     try {
-      // Prefer signing subkey to match backend behavior
-      const sign = await (publicKey as any).getSigningKey?.();
-      if (sign) {
-        return sign.getKeyID().toHex().toLowerCase();
-      }
-    } catch {}
-    try {
+      // Prefer encryption subkey KeyID as canonical fingerprint
       const enc = await publicKey.getEncryptionKey();
       if (enc) {
         return enc.getKeyID().toHex().toLowerCase();
+      }
+    } catch {}
+    // Fallback to signing key ID
+    try {
+      const sign = await (publicKey as any).getSigningKey?.();
+      if (sign) {
+        return sign.getKeyID().toHex().toLowerCase();
       }
     } catch {}
     // Fallback to primary key id
