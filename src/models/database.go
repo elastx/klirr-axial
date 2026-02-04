@@ -37,7 +37,7 @@ func InitDB(cfg config.DatabaseConfig) error {
 
 	log.Println("Running migrations...")
 	// Run migrations
-	if err := DB.AutoMigrate(&User{}, &Message{}, &Bulletin{}, &File{}); err != nil {
+	if err := DB.AutoMigrate(&User{}, &Message{}, &Bulletin{}); err != nil {
 		return fmt.Errorf("failed to run migrations: %v", err)
 	}
 
@@ -47,7 +47,7 @@ func InitDB(cfg config.DatabaseConfig) error {
 		DataType   string `gorm:"column:data_type"`
 		IsNullable string `gorm:"column:is_nullable"`
 	}
-	
+
 	if err := DB.Raw(`
 		SELECT column_name, data_type, is_nullable 
 		FROM information_schema.columns 
@@ -63,7 +63,7 @@ func InitDB(cfg config.DatabaseConfig) error {
 	}
 
 	return nil
-} 
+}
 
 func GetUserByFingerprint(fingerprint Fingerprint) (*User, error) {
 	var user User

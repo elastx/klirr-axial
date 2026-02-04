@@ -16,10 +16,9 @@ const (
 )
 
 type SyncRequest struct {
-	MessageRanges  []models.HashedPeriod `json:"message_ranges"`
-	BulletinRanges []models.HashedPeriod `json:"bulletin_ranges,omitempty"`
-	Users          []models.HashedUsersRange  `json:"users"`
-	Files          []models.HashedFilesRange  `json:"files,omitempty"`
+	MessageRanges  []models.HashedPeriod     `json:"message_ranges"`
+	BulletinRanges []models.HashedPeriod     `json:"bulletin_ranges,omitempty"`
+	Users          []models.HashedUsersRange `json:"users"`
 }
 
 type SyncResponse struct {
@@ -31,7 +30,6 @@ type SyncResponse struct {
 	Bulletins       []models.BulletinsPeriod  `json:"bulletins,omitempty"`
 	UserRangeHashes []models.HashedUsersRange `json:"user_range_hashes,omitempty"`
 	Users           []models.UsersRange       `json:"users,omitempty"`
-	Files           []models.FilesRange       `json:"files,omitempty"`
 }
 
 func handleSync(w http.ResponseWriter, r *http.Request) {

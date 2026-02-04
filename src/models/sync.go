@@ -12,7 +12,7 @@ import (
 type SyncState struct {
 	mu        sync.RWMutex
 	isSyncing bool
-	hashes      HashSet
+	hashes    HashSet
 }
 
 var (
@@ -63,26 +63,18 @@ type StringRange struct {
 
 type UsersRange struct {
 	StringRange
-	Users  []User `json:"users"`
+	Users []User `json:"users"`
 }
 
 type HashedUsersRange struct {
 	StringRange
-	Hash  string `json:"hash"`
-}
-
-
-type FilesRange struct {
-	StringRange
-	Files  []File `json:"files"`
+	Hash string `json:"hash"`
 }
 
 type HashedFilesRange struct {
 	StringRange
-	Hash  string `json:"hash"`
+	Hash string `json:"hash"`
 }
-
-
 
 // StartSync attempts to start a sync operation
 func StartSync() bool {
@@ -209,7 +201,6 @@ func CountMessagesByPeriod(db *gorm.DB, period Period) int64 {
 	db.Model(&Message{}).Where("created_at >= ? AND created_at < ?", period.Start, period.End).Count(&count)
 	return count
 }
-
 
 func GetBulletinsByPeriod(db *gorm.DB, period Period) ([]Bulletin, error) {
 	var bulletins []Bulletin
