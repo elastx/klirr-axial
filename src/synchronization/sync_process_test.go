@@ -65,6 +65,8 @@ func insertBulletinRawUnit(t *testing.T, db *gorm.DB, topic string, content mode
 func insertUserRawUnit(t *testing.T, db *gorm.DB, fingerprint string) models.User {
     t.Helper()
     u := models.User{Fingerprint: fingerprint}
+    u.Base.ID = u.Hash()
+    u.Base.BeforeCreate(nil)
     if err := db.Session(&gorm.Session{SkipHooks: true}).Create(&u).Error; err != nil {
         t.Fatalf("create user: %v", err)
     }

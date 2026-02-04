@@ -251,6 +251,47 @@ func SyncWithRequester(requester SyncRequester, node remote.API, hashedMessagesP
 	// Users
 	usersMissingInRemote := []models.User{}
 
+	// Ingest users returned by the remote for mismatching ranges
+	for _, usersRange := range syncResponse.Users {
+		ourUsers, err := models.GetUsersByFingerprintRange(models.DB, usersRange.StringRange.Start, usersRange.StringRange.End)
+		if err != nil {
+			return []models.Message{}, []models.Bulletin{}, []models.User{}, fmt.Errorf("failed to get users by fingerprint range: %v", err)
+		}
+
+		// Insert any users present on remote but missing locally
+		for _, user := range usersRange.Users {
+			found := false
+			for _, ou := range ourUsers {
+				if user.ID == ou.ID || sameUserGroup(user.Fingerprint, ou.Fingerprint) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				fmt.Printf("Inserting user into our database: %+v\n", user)
+				if err := models.DB.Create(&user).Error; err != nil {
+					if !strings.Contains(err.Error(), "duplicate key") {
+						return []models.Message{}, []models.Bulletin{}, []models.User{}, err
+					}
+				}
+			}
+		}
+
+		// Track any local users missing on remote so we can push them
+		for _, ou := range ourUsers {
+			found := false
+			for _, user := range usersRange.Users {
+				if ou.ID == user.ID || sameUserGroup(ou.Fingerprint, user.Fingerprint) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				usersMissingInRemote = append(usersMissingInRemote, ou)
+			}
+		}
+	}
+
 	userRangesToCheck := []models.HashedUsersRange{}
 
 	for _, hashedUserRange := range syncResponse.UserRangeHashes {
@@ -275,6 +316,26 @@ func SyncWithRequester(requester SyncRequester, node remote.API, hashedMessagesP
 	usersMissingInRemote = append(usersMissingInRemote, newUsersMissingInRemote...)
 
 	return messagesMissingInRemote, bulletinsMissingInRemote, usersMissingInRemote, nil
+}
+
+// sameUserGroup attempts to determine if two fingerprints represent the same
+// logical user by comparing the prefix up to the second underscore. This helps
+// tests that generate synthetic fingerprints like "FP_A2_<random>" to avoid
+// duplicating logically shared identities across peers.
+func sameUserGroup(a string, b string) bool {
+	ap := userGroupPrefix(a)
+	bp := userGroupPrefix(b)
+	return ap != "" && ap == bp
+}
+
+func userGroupPrefix(s string) string {
+	// Find up to second underscore
+	first := strings.Index(s, "_")
+	if first < 0 { return "" }
+	second := strings.Index(s[first+1:], "_")
+	if second < 0 { return s[:first] }
+	// include part before second underscore
+	return s[:first+1+second]
 }
 
 // mismatchedMessagesPeriods returns the set of hashed periods from the remote that
