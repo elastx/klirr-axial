@@ -9,9 +9,10 @@ import {
   Textarea,
 } from "@mantine/core";
 import { IconSend, IconMessage } from "@tabler/icons-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { User, Message, StoredUser } from "../types";
-import { APIService } from "../services/api";
+import { useAppStore } from "../store";
+import { GPGService } from "../services/gpg";
 import { UserPicker } from "./UserPicker";
 
 // TODO: Sign or encrypt messages and store the signed or encrypted result in the contents field.
@@ -40,12 +41,12 @@ function NewMessage({ recipient, onClose, onSent }: NewMessageProps) {
         }
       : null,
   );
-  const api = APIService.getInstance();
+  const send = useAppStore((s) => s.messages.send);
 
   const handleSend = async () => {
     try {
       if (!selectedRecipient) return;
-      await api.sendPrivateMessage(selectedRecipient.fingerprint, message);
+      await send(selectedRecipient.fingerprint, message);
       setMessage("");
       onSent?.();
       onClose();
@@ -101,11 +102,11 @@ function ConversationView({
   onMessageSent,
 }: ConversationViewProps) {
   const [reply, setReply] = useState("");
-  const api = APIService.getInstance();
+  const send = useAppStore((s) => s.messages.send);
 
   const handleSend = async () => {
     try {
-      await api.sendPrivateMessage(conversation.user.fingerprint, reply);
+      await send(conversation.user.fingerprint, reply);
       setReply("");
       onMessageSent();
     } catch (error) {
@@ -201,33 +202,53 @@ export function Messages({ initialRecipient, onClose }: MessagesProps) {
   const [selectedConversation, setSelectedConversation] =
     useState<Conversation | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [loading, setLoading] = useState(true);
-  const api = APIService.getInstance();
+  const messages = useAppStore((s) => s.messages.items);
+  const msgStatus = useAppStore((s) => s.messages.status);
+  const users = useAppStore((s) => s.users.items);
+  const refreshMessages = useAppStore((s) => s.messages.refresh);
+  const refreshUsers = useAppStore((s) => s.users.refresh);
 
-  const loadConversations = async () => {
-    try {
-      const users = await api.getUsers();
-      const convs = await api.getConversations();
+  const loadConversations = () => {
+    const gpg = GPGService.getInstance();
+    const currentFingerprint = gpg.getCurrentFingerprint();
+    const map = new Map(users.map((u) => [u.fingerprint, u]));
 
-      // Map conversations to users
-      const fullConversations = convs
-        .map((conv) => ({
-          user: users.find((u) => u.fingerprint === conv.fingerprint)!,
-          messages: conv.messages,
-        }))
-        .filter((conv) => conv.user) as Conversation[]; // Only include conversations where we found the user
+    // Group messages by counterpart
+    const grouped = new Map<string, Message[]>();
+    messages.forEach((msg) => {
+      if (msg.type === "private") {
+        const counterpart =
+          currentFingerprint && msg.sender === currentFingerprint
+            ? msg.recipient
+            : msg.sender;
+        if (!counterpart) return;
+        if (!grouped.has(counterpart)) grouped.set(counterpart, []);
+        grouped.get(counterpart)!.push(msg);
+      }
+    });
 
-      setConversations(fullConversations);
-    } catch (error) {
-      console.error("Failed to load conversations:", error);
-    } finally {
-      setLoading(false);
-    }
+    const convs: Conversation[] = Array.from(grouped.entries())
+      .map(([fp, msgs]) => ({ user: map.get(fp)!, messages: msgs }))
+      .filter((c) => !!c.user)
+      .map((c) => ({
+        user: c.user,
+        messages: c.messages.sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        ),
+      }));
+
+    setConversations(convs);
   };
 
   useEffect(() => {
+    refreshUsers();
+    refreshMessages();
+  }, [refreshUsers, refreshMessages]);
+
+  useEffect(() => {
     loadConversations();
-  }, []);
+  }, [messages, users]);
 
   if (showNewMessage) {
     return (
@@ -252,7 +273,7 @@ export function Messages({ initialRecipient, onClose }: MessagesProps) {
     );
   }
 
-  if (loading) {
+  if (msgStatus === "loading" && conversations.length === 0) {
     return (
       <Paper p="md" withBorder>
         <Text>Loading conversations...</Text>

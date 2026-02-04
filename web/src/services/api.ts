@@ -1,5 +1,12 @@
 import axios from "axios";
-import { Message, StoredUser, User, BulletinPost, hydrateUser } from "../types";
+import {
+  Message,
+  StoredUser,
+  User,
+  BulletinPost,
+  hydrateUser,
+  Group,
+} from "../types";
 import { UserInfo } from "./gpg";
 import { GPGService } from "./gpg";
 
@@ -31,6 +38,33 @@ export class APIService {
       .get("/users")
       .then((res) => res.data)
       .then((users: StoredUser[]) => Promise.all(users.map(hydrateUser)));
+  }
+
+  async getGroups(): Promise<Group[]> {
+    return axios
+      .get("/groups")
+      .then((res) => res.data)
+      .then((groups: Group[]) =>
+        Promise.all(
+          groups.map(async (group) => {
+            const user = await hydrateUser(group.user);
+            const users = group.users
+              ? await Promise.all(group.users.map(hydrateUser))
+              : [];
+            return { ...group, user, users };
+          }),
+        ),
+      );
+  }
+
+  async registerGroup(
+    userId: string,
+    encryptedPrivateKey: string,
+  ): Promise<void> {
+    await axios.post("/groups", {
+      user_id: userId,
+      private_key: encryptedPrivateKey,
+    });
   }
 
   async getUser(fingerprint: string): Promise<User> {
@@ -196,7 +230,7 @@ export class APIService {
     uploaderFingerprint: string,
     description?: string,
     encrypted?: boolean,
-    recipients?: string[]
+    recipients?: string[],
   ): Promise<any> {
     const formData = new FormData();
     formData.append("file", file);
@@ -217,7 +251,7 @@ export class APIService {
     uploader?: string,
     contentHash?: string,
     limit = 50,
-    offset = 0
+    offset = 0,
   ): Promise<any[]> {
     const response = await axios.get("/files", {
       params: { uploader, content_hash: contentHash, limit, offset },

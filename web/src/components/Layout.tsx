@@ -16,6 +16,7 @@ import {
   rem,
   Box,
   Title,
+  Stack,
 } from "@mantine/core";
 import {
   IconUsers,
@@ -35,6 +36,7 @@ import { FileManager } from "./FileManager";
 import classes from "./Layout.module.css";
 import AvatarGrid from "./avatar/AvatarGrid";
 import UserAvatar from "./avatar/UserAvatar";
+import GroupList from "./GroupList";
 
 interface MainLinkProps {
   icon: ReactNode;
@@ -73,6 +75,13 @@ export function Layout() {
       label: "Users",
       id: "users",
       path: "/users",
+    },
+    {
+      icon: <IconUsers size={rem(18)} />,
+      color: "cyan",
+      label: "Groups",
+      id: "groups",
+      path: "/groups",
     },
     {
       icon: <IconMessages size={rem(18)} />,
@@ -135,7 +144,7 @@ export function Layout() {
               hiddenFrom="sm"
               size="sm"
             />
-            <Title order={3}>Axial BBS</Title>
+            <Title order={3}>Axial</Title>
           </Group>
 
           <Group gap="xs">
@@ -171,15 +180,18 @@ export function Layout() {
       </AppShell.Navbar>
 
       <AppShell.Main>
-        <Routes>
-          <Route path="/users" element={<UserList />} />
-          <Route path="/messages" element={<Messages />} />
-          <Route path="/bulletin" element={<BulletinBoard />} />
-          <Route path="/files" element={<FileManager />} />
-          <Route path="/keys" element={<UserSettings />} />
-          <Route path="/avatar" element={<AvatarGrid />} />
-          <Route path="/" element={<Navigate to="/users" replace />} />
-        </Routes>
+        <Stack mb="md" w={"100%"}>
+          <Routes>
+            <Route path="/users" element={<UserList />} />
+            <Route path="/groups" element={<GroupList />} />
+            <Route path="/messages" element={<Messages />} />
+            <Route path="/bulletin" element={<BulletinBoard />} />
+            <Route path="/files" element={<FileManager />} />
+            <Route path="/keys" element={<UserSettings />} />
+            <Route path="/avatar" element={<AvatarGrid />} />
+            <Route path="/" element={<Navigate to="/users" replace />} />
+          </Routes>
+        </Stack>
       </AppShell.Main>
     </AppShell>
   );

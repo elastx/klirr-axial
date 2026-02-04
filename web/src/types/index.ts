@@ -24,9 +24,22 @@ export interface Message {
 export interface User {
   id: string;
   fingerprint: string;
+  // Canonical signing key ID for display/use in signed messages
+  signing_fingerprint?: string;
+  // All encryption subkey IDs for resolving recipients
+  encryption_fingerprints?: string[];
   name: string;
   email: string;
   public_key: string;
+}
+
+export interface Group {
+  id: string;
+  user: User;
+  // Stored raw fingerprints from backend record
+  members: string[];
+  // Hydrated users resolved by backend (subset of members that exist)
+  users: User[];
 }
 
 // StoredUser mirrors server data shape for lightweight user entries
@@ -36,6 +49,9 @@ export interface StoredUser {
   // Optional identity details when available
   name?: string;
   email?: string;
+  // Optional extended fingerprints when provided by backend
+  signing_fingerprint?: string;
+  encryption_fingerprints?: string[];
 }
 
 export interface Topic {

@@ -1,9 +1,10 @@
 import { MantineProvider } from "@mantine/core";
 import { GPGService } from "./services/gpg";
-import { KeyGeneration } from "./components/KeyGeneration";
 import { Layout } from "./components/Layout";
 import "@mantine/core/styles.css";
+import "./index.css";
 import { BrowserRouter } from "react-router-dom";
+import Signup from "./components/Signup";
 
 export default function App() {
   const gpg = GPGService.getInstance();
@@ -31,7 +32,7 @@ export default function App() {
           },
         }}
       >
-        {!gpg.isKeyLoaded() ? <KeyGeneration /> : <Layout />}
+        {!gpg.isKeyLoaded() ? <Signup /> : <Layout />}
       </MantineProvider>
     </BrowserRouter>
   );

@@ -24,6 +24,7 @@ import {
 } from "@tabler/icons-react";
 import { APIService } from "../services/api";
 import { GPGService } from "../services/gpg";
+import { useAppStore } from "../store";
 
 interface FileMetadata {
   id: string;
@@ -39,8 +40,9 @@ interface FileMetadata {
 }
 
 export function FileManager() {
-  const [files, setFiles] = useState<FileMetadata[]>([]);
-  const [loading, setLoading] = useState(false);
+  const filesSlice = useAppStore((s) => s.files);
+  const files = useAppStore((s) => s.files.items) as unknown as FileMetadata[];
+  const loading = filesSlice.status === "loading";
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [description, setDescription] = useState("");
@@ -54,20 +56,17 @@ export function FileManager() {
   const gpg = GPGService.getInstance();
 
   useEffect(() => {
-    loadFiles();
+    filesSlice.refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadFiles = async () => {
-    setLoading(true);
     setError(null);
     try {
-      const data = await api.getFiles();
-      setFiles(data);
+      await filesSlice.refresh();
     } catch (err) {
       setError("Failed to load files");
       console.error(err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -82,7 +81,7 @@ export function FileManager() {
         throw new Error("No GPG key loaded");
       }
 
-      await api.uploadFile(selectedFile, fingerprint, description);
+      await filesSlice.upload(selectedFile, fingerprint, description);
       setSelectedFile(null);
       setDescription("");
       await loadFiles();
@@ -117,7 +116,7 @@ export function FileManager() {
 
     setError(null);
     try {
-      await api.deleteFile(fileId);
+      await filesSlice.remove(fileId);
       await loadFiles();
     } catch (err) {
       setError("Failed to delete file");

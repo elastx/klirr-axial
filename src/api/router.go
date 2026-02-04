@@ -84,6 +84,18 @@ func RegisterRoutes() {
 		}
 	}))
 
+	// groups
+	http.HandleFunc("/v1/groups", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("Groups endpoint: %s %s", r.Method, r.URL.Path)
+		switch r.Method {
+		case http.MethodGet:
+			handleGetGroups(w, r)
+		case http.MethodPost:
+			handleCreateGroup(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
 
 	// Message routes
 	http.HandleFunc("/v1/messages", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {

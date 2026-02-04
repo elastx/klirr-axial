@@ -4,7 +4,7 @@ import { paths } from "./paths";
 import { Avatar, Tooltip } from "@mantine/core";
 import { defaultColorSpace } from "./defaultColorSpace";
 
-type AvatarProps = {
+export type AvatarProps = {
   seed: string;
   colorSpace?: ColorSpace;
   size?: number;

@@ -16,11 +16,11 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
-import { APIService } from "../services/api";
 import { BulletinPost, User } from "../types";
 import UserAvatar from "./avatar/UserAvatar";
 import { AxiosError } from "axios";
 import { GPGService } from "../services/gpg";
+import { useAppStore } from "../store";
 
 interface NewPostProps {
   onSubmit: () => void;
@@ -33,11 +33,10 @@ function NewPost({ onSubmit, parentId, initialTopic, onCancel }: NewPostProps) {
   const [errorMessage, setErrorMessage] = useState("");
   const [topic, setTopic] = useState(initialTopic || "");
   const [content, setContent] = useState("");
-  const api = APIService.getInstance();
+  const post = useAppStore((s) => s.bulletin.post);
 
   const handleSubmit = async () => {
-    api
-      .sendBulletinPost(topic, content, parentId)
+    post(topic, content, parentId)
       .then(() => {
         setTopic("");
         setContent("");
@@ -172,31 +171,19 @@ function Post({ post, posts, onReply }: PostProps) {
 }
 
 export function BulletinBoard() {
-  const [posts, setPosts] = useState<BulletinPost[]>([]);
-  const [loading, setLoading] = useState(true);
+  const posts = useAppStore((s) => s.bulletin.items);
+  const status = useAppStore((s) => s.bulletin.status);
+  const refresh = useAppStore((s) => s.bulletin.refresh);
   const [replyTo, setReplyTo] = useState<BulletinPost | null>(null);
   const [showNewPost, setShowNewPost] = useState(true);
-  const api = APIService.getInstance();
-
-  const loadPosts = async () => {
-    try {
-      const fetchedPosts = await api.getBulletinPosts();
-      setPosts(fetchedPosts);
-    } catch (error) {
-      console.error("Failed to load posts:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadPosts();
-  }, []);
+    refresh();
+  }, [refresh]);
 
   const handlePostSubmitted = async () => {
     setReplyTo(null);
     setShowNewPost(true);
-    await loadPosts();
+    await refresh();
   };
 
   const handleReply = (post: BulletinPost) => {
@@ -240,7 +227,7 @@ export function BulletinBoard() {
         <Text fw={500} mb="md">
           Recent Posts
         </Text>
-        {loading ? (
+        {status === "loading" && posts.length === 0 ? (
           <Text c="dimmed">Loading posts...</Text>
         ) : posts.length === 0 ? (
           <Text c="dimmed">No posts yet</Text>

@@ -22,6 +22,12 @@ type Group struct {
 	Members Fingerprints `json:"members,omitempty" gorm:"column:members;type:jsonb"`
 }
 
+type HydratedGroup struct {
+	Group
+	User User `json:"user" gorm:"foreignKey:UserID;references:Fingerprint"`
+	Users []User `json:"users" gorm:"-"`
+}
+
 // Gorm setup
 func (Group) TableName() string {
 	return "groups"
