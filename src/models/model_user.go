@@ -37,6 +37,11 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 	}
 	canonical := strings.ToLower(string(canonicalFP))
 
+	// Enforce canonical format
+	if !IsCanonicalFingerprint(canonical) {
+		return fmt.Errorf("canonical fingerprint invalid format")
+	}
+
 	// Validate supplied fingerprint if present
 	if u.Fingerprint != "" && strings.ToLower(u.Fingerprint) != canonical {
 		return fmt.Errorf("supplied fingerprint does not match encryption key id")
