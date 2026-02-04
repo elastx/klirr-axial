@@ -199,3 +199,19 @@ func GetUsersHashByFingerprintRange(db *gorm.DB, start, end string) (string, err
 
 	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
+
+func GetGroupsHashByIDRange(db *gorm.DB, start, end string) (string, error) {
+	query := db.Model(&Group{}).Where("id >= ?", start).Where("id <= ?", end)
+
+	var groupIDs []string
+	if err := query.Order("id").Pluck("id", &groupIDs).Error; err != nil {
+		return "", fmt.Errorf("failed to get group IDs: %v", err)
+	}
+
+	hasher := sha256.New()
+	for _, id := range groupIDs {
+		hasher.Write([]byte(id))
+	}
+
+	return hex.EncodeToString(hasher.Sum(nil)), nil
+}

@@ -72,6 +72,14 @@ func (n *API) SyncUsers() Endpoint[[]models.User, interface{}, interface{}] {
 	}
 }
 
+func (n *API) SyncGroups() Endpoint[[]models.Group, interface{}, interface{}] {
+	return Endpoint[[]models.Group, interface{}, interface{}]{
+		Node:    n,
+		Version: "v1",
+		Path:    "sync/groups",
+	}
+}
+
 func (n *API) SyncFiles() Endpoint[[]models.File, interface{}, interface{}] {
 	return Endpoint[[]models.File, interface{}, interface{}]{
 		Node:    n,

@@ -16,22 +16,25 @@ const (
 )
 
 type SyncRequest struct {
-	MessageRanges  []models.HashedPeriod `json:"message_ranges"`
-	BulletinRanges []models.HashedPeriod `json:"bulletin_ranges,omitempty"`
-	Users          []models.HashedUsersRange  `json:"users"`
-	Files          []models.HashedFilesRange  `json:"files,omitempty"`
+	MessageRanges  []models.HashedPeriod      `json:"message_ranges"`
+	BulletinRanges []models.HashedPeriod      `json:"bulletin_ranges,omitempty"`
+	Users          []models.HashedStringRange `json:"users"`
+	Groups         []models.HashedStringRange `json:"groups,omitempty"`
+	Files          []models.HashedStringRange `json:"files,omitempty"`
 }
 
 type SyncResponse struct {
-	Hashes          models.HashSet            `json:"hash"`
-	IsBusy          bool                      `json:"is_busy"`
-	MessageRanges   []models.HashedPeriod     `json:"message_ranges,omitempty"`
-	Messages        []models.MessagesPeriod   `json:"messages,omitempty"`
-	BulletinRanges  []models.HashedPeriod     `json:"bulletin_ranges,omitempty"`
-	Bulletins       []models.BulletinsPeriod  `json:"bulletins,omitempty"`
-	UserRangeHashes []models.HashedUsersRange `json:"user_range_hashes,omitempty"`
-	Users           []models.UsersRange       `json:"users,omitempty"`
-	Files           []models.FilesRange       `json:"files,omitempty"`
+	Hashes           models.HashSet             `json:"hash"`
+	IsBusy           bool                       `json:"is_busy"`
+	MessageRanges    []models.HashedPeriod      `json:"message_ranges,omitempty"`
+	Messages         []models.MessagesPeriod    `json:"messages,omitempty"`
+	BulletinRanges   []models.HashedPeriod      `json:"bulletin_ranges,omitempty"`
+	Bulletins        []models.BulletinsPeriod   `json:"bulletins,omitempty"`
+	UserRangeHashes  []models.HashedStringRange `json:"user_range_hashes,omitempty"`
+	Users            []models.UsersRange        `json:"users,omitempty"`
+	GroupRangeHashes []models.HashedStringRange `json:"group_range_hashes,omitempty"`
+	Groups           []models.GroupsRange       `json:"groups,omitempty"`
+	Files            []models.FilesRange        `json:"files,omitempty"`
 }
 
 func handleSync(w http.ResponseWriter, r *http.Request) {
@@ -255,7 +258,7 @@ func ComputeSyncResponse(db *gorm.DB, req SyncRequest) (SyncResponse, error) {
 	}
 	fmt.Printf("Generated %d user range hashes\n", len(ourUserRangeHashes))
 
-	mismatchingUserRanges := []models.HashedUsersRange{}
+	mismatchingUserRanges := []models.HashedStringRange{}
 	for _, ourRange := range ourUserRangeHashes {
 		ourStart := ourRange.Start
 		ourEnd := ourRange.End

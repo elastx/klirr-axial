@@ -34,7 +34,7 @@ func newTestDBUnit(t *testing.T) *gorm.DB {
     if err != nil {
         t.Fatalf("failed to open sqlite memory DB: %v", err)
     }
-    if err := db.AutoMigrate(&models.User{}, &models.Message{}, &models.Bulletin{}, &models.File{}); err != nil {
+    if err := db.AutoMigrate(&models.User{}, &models.Group{}, &models.Message{}, &models.Bulletin{}, &models.File{}); err != nil {
         t.Fatalf("failed to migrate: %v", err)
     }
     return db
@@ -159,12 +159,18 @@ func TestSyncExchangeSkeleton(t *testing.T) {
     hashedUsersB, err := models.GetUsersHashRanges(dbB, []models.StringRange{{Start: "", End: "zzzz"}})
     if err != nil { t.Fatalf("hash users ranges B: %v", err) }
 
+    hashedGroupsA, err := models.GetGroupsHashRanges(dbA, []models.StringRange{{Start: "", End: "zzzz"}})
+    if err != nil { t.Fatalf("hash groups ranges A: %v", err) }
+
+    hashedGroupsB, err := models.GetGroupsHashRanges(dbB, []models.StringRange{{Start: "", End: "zzzz"}})
+    if err != nil { t.Fatalf("hash groups ranges B: %v", err) }
+
     nodeA := remote.API{Address: "nodeA"}
     nodeB := remote.API{Address: "nodeB"}
 
     // Round 1: A pulls from B and computes messages to send to B
     models.DB = dbA.Session(&gorm.Session{SkipHooks: true})
-    missingMessagesForBFromA, missingBulletinsForBFromA, missingUsersForBFromA, err := SyncWithRequester(fakeRequester{DB: dbB}, nodeB, hashedMessagesA, hashedBulletinsA, hashedUsersA)
+    missingMessagesForBFromA, missingBulletinsForBFromA, missingUsersForBFromA, missingGroupsForBFromA, err := SyncWithRequester(fakeRequester{DB: dbB}, nodeB, hashedMessagesA, hashedBulletinsA, hashedUsersA, hashedGroupsA)
     if err != nil { t.Fatalf("sync A->B: %v", err) }
     // Apply remote messages to A
     for _, m := range missingMessagesForBFromA {
@@ -182,10 +188,14 @@ func TestSyncExchangeSkeleton(t *testing.T) {
             t.Fatalf("apply A->B user: %v", err)
         }
     }
-
+    for _, g := range missingGroupsForBFromA {
+        if err := dbB.Session(&gorm.Session{SkipHooks: true}).Create(&g).Error; err != nil && !isDuplicateUnit(err) {
+            t.Fatalf("apply A->B group: %v", err)
+        }
+    }
     // Round 2: B pulls from A and applies
     models.DB = dbB.Session(&gorm.Session{SkipHooks: true})
-    missingMessagesForAFromB, missingBulletinsForAFromB, missingUsersForAFromB, err := SyncWithRequester(fakeRequester{DB: dbA}, nodeA, hashedMessagesB, hashedBulletinsB, hashedUsersB)
+    missingMessagesForAFromB, missingBulletinsForAFromB, missingUsersForAFromB, missingGroupsForAFromB, err := SyncWithRequester(fakeRequester{DB: dbA}, nodeA, hashedMessagesB, hashedBulletinsB, hashedUsersB, hashedGroupsB)
     if err != nil { t.Fatalf("sync B->A: %v", err) }
     for _, m := range missingMessagesForAFromB {
         if err := dbA.Session(&gorm.Session{SkipHooks: true}).Create(&m).Error; err != nil && !isDuplicateUnit(err) {
@@ -200,6 +210,11 @@ func TestSyncExchangeSkeleton(t *testing.T) {
     for _, u := range missingUsersForAFromB {
         if err := dbA.Session(&gorm.Session{SkipHooks: true}).Create(&u).Error; err != nil && !isDuplicateUnit(err) {
             t.Fatalf("apply B->A user: %v", err)
+        }
+    }
+    for _, g := range missingGroupsForAFromB {
+        if err := dbA.Session(&gorm.Session{SkipHooks: true}).Create(&g).Error; err != nil && !isDuplicateUnit(err) {
+            t.Fatalf("apply B->A group: %v", err)
         }
     }
 

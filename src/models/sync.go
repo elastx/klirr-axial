@@ -61,25 +61,24 @@ type StringRange struct {
 	End   string `json:"end"`
 }
 
+type HashedStringRange struct {
+	StringRange
+	Hash  string `json:"hash"`
+}
+
 type UsersRange struct {
 	StringRange
 	Users  []User `json:"users"`
 }
 
-type HashedUsersRange struct {
+type GroupsRange struct {
 	StringRange
-	Hash  string `json:"hash"`
+	Groups  []Group `json:"groups"`
 }
-
 
 type FilesRange struct {
 	StringRange
 	Files  []File `json:"files"`
-}
-
-type HashedFilesRange struct {
-	StringRange
-	Hash  string `json:"hash"`
 }
 
 
@@ -157,14 +156,30 @@ func GetBulletinsHashRanges(db *gorm.DB, periods []Period) ([]HashedPeriod, erro
 	return hashedPeriods, nil
 }
 
-func GetUsersHashRanges(db *gorm.DB, stringRanges []StringRange) ([]HashedUsersRange, error) {
-	hashedRanges := []HashedUsersRange{}
+func GetUsersHashRanges(db *gorm.DB, stringRanges []StringRange) ([]HashedStringRange, error) {
+	hashedRanges := []HashedStringRange{}
 	for _, stringRange := range stringRanges {
 		hash, err := GetUsersHashByFingerprintRange(db, stringRange.Start, stringRange.End)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get users hash: %v", err)
 		}
-		hashedRanges = append(hashedRanges, HashedUsersRange{
+		hashedRanges = append(hashedRanges, HashedStringRange{
+			StringRange: stringRange,
+			Hash:        hash,
+		})
+	}
+
+	return hashedRanges, nil
+}
+
+func GetGroupsHashRanges(db *gorm.DB, stringRanges []StringRange) ([]HashedStringRange, error) {
+	hashedRanges := []HashedStringRange{}
+	for _, stringRange := range stringRanges {
+		hash, err := GetGroupsHashByIDRange(db, stringRange.Start, stringRange.End)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get groups hash: %v", err)
+		}
+		hashedRanges = append(hashedRanges, HashedStringRange{
 			StringRange: stringRange,
 			Hash:        hash,
 		})
@@ -210,7 +225,6 @@ func CountMessagesByPeriod(db *gorm.DB, period Period) int64 {
 	return count
 }
 
-
 func GetBulletinsByPeriod(db *gorm.DB, period Period) ([]Bulletin, error) {
 	var bulletins []Bulletin
 	err := db.Where("created_at >= ? AND created_at < ?", period.Start, period.End).Find(&bulletins).Error
@@ -234,3 +248,17 @@ func CountUsersByFingerprintRange(db *gorm.DB, start, end string) int64 {
 	db.Model(&User{}).Where("fingerprint >= ? AND fingerprint < ?", start, end).Count(&count)
 	return count
 }
+
+func GetGroupsByIDRange(db *gorm.DB, start, end string) ([]Group, error) {
+	var groups []Group
+	err := db.Where("id >= ? AND id < ?", start, end).Order("id").Find(&groups).Error
+	return groups, err
+}
+
+func CountGroupsByIDRange(db *gorm.DB, start, end string) int64 {
+	var count int64
+	db.Model(&Group{}).Where("id >= ? AND id < ?", start, end).Count(&count)
+	return count
+}
+
+// Files skipped for now
