@@ -1,5 +1,7 @@
 FROM golang:1.23.1-bookworm
 
+USER axial
+
 WORKDIR /app
 COPY . .
 

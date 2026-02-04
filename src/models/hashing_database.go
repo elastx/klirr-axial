@@ -13,7 +13,6 @@ import (
 type HashSet struct {
 	Messages  string `json:"messages"`
 	Users     string `json:"users"`
-	Files     string `json:"files"`
 	Bulletins string `json:"bulletins"`
 	Full      string `json:"full"`
 }
@@ -22,7 +21,6 @@ var (
 	hashes = HashSet{
 		Messages:  "",
 		Users:     "",
-		Files:     "",
 		Bulletins: "",
 		Full:      "",
 	}
@@ -65,15 +63,14 @@ func GetMessagesHash(db *gorm.DB, start, end *time.Time) (string, error) {
 	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
-
-
 // GetBulletinsHash calculates a hash of bulletins just like messages
 // Bulletins have topic, content and parent id where message has content only
-// type CreateBulletin struct {
-// 	Topic string `json:"topic" gorm:"column:topic;not null"`
-// 	Content Crypto `json:"content" gorm:"column:content;not null"`
-// 	ParentID *string `json:"parent_id,omitempty" gorm:"column:parent_id;default:null"`
-// }
+//
+//	type CreateBulletin struct {
+//		Topic string `json:"topic" gorm:"column:topic;not null"`
+//		Content Crypto `json:"content" gorm:"column:content;not null"`
+//		ParentID *string `json:"parent_id,omitempty" gorm:"column:parent_id;default:null"`
+//	}
 func GetBulletinsHash(db *gorm.DB, start, end *time.Time) (string, error) {
 	query := db.Model(&Bulletin{}).Order("created_at")
 
@@ -112,21 +109,6 @@ func GetUsersHash(db *gorm.DB) (string, error) {
 	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
-// GetFilesHash calculates a hash of file IDs ordered by timestamp
-func GetFilesHash(db *gorm.DB) (string, error) {
-	var fileIDs []string
-	if err := db.Model(&File{}).Order("created_at").Pluck("id", &fileIDs).Error; err != nil {
-		return "", fmt.Errorf("failed to get file IDs: %v", err)
-	}
-
-	hasher := sha256.New()
-	for _, id := range fileIDs {
-		hasher.Write([]byte(id))
-	}
-
-	return hex.EncodeToString(hasher.Sum(nil)), nil
-}
-
 func RefreshHashes(db *gorm.DB) error {
 	messagesHash, err := GetMessagesHash(db, nil, nil)
 	if err != nil {
@@ -143,24 +125,17 @@ func RefreshHashes(db *gorm.DB) error {
 		return err
 	}
 
-	filesHash, err := GetFilesHash(db)
-	if err != nil {
-		return err
-	}
-
 	// Combine hashes in a deterministic order
 	hasher := sha256.New()
 	hasher.Write([]byte("messages:" + messagesHash))
 	hasher.Write([]byte("bulletins:" + bulletinsHash))
 	hasher.Write([]byte("users:" + usersHash))
-	hasher.Write([]byte("files:" + filesHash))
 
 	hashes = HashSet{
-		Messages: messagesHash,
+		Messages:  messagesHash,
 		Bulletins: bulletinsHash,
-		Users:    usersHash,
-		Files:    filesHash,
-		Full:     hex.EncodeToString(hasher.Sum(nil)),
+		Users:     usersHash,
+		Full:      hex.EncodeToString(hasher.Sum(nil)),
 	}
 
 	UpdateHashes(hashes)

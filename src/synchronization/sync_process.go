@@ -149,7 +149,6 @@ func SyncWithRequester(requester SyncRequester, node remote.API, hashedMessagesP
 		MessageRanges:  hashedMessagesPeriods,
 		BulletinRanges: hashedBulletinPeriods,
 		Users:          hashedUsers,
-		Files:          []models.HashedFilesRange{},
 	}
 
 	// Let the requester handle the transport (HTTP in prod, in-memory in tests).
@@ -331,9 +330,13 @@ func sameUserGroup(a string, b string) bool {
 func userGroupPrefix(s string) string {
 	// Find up to second underscore
 	first := strings.Index(s, "_")
-	if first < 0 { return "" }
+	if first < 0 {
+		return ""
+	}
 	second := strings.Index(s[first+1:], "_")
-	if second < 0 { return s[:first] }
+	if second < 0 {
+		return s[:first]
+	}
 	// include part before second underscore
 	return s[:first+1+second]
 }

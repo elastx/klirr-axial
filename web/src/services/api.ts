@@ -190,54 +190,54 @@ export class APIService {
     }
   }
 
-  // File operations
-  async uploadFile(
-    file: File,
-    uploaderFingerprint: string,
-    description?: string,
-    encrypted?: boolean,
-    recipients?: string[]
-  ): Promise<any> {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("uploader", uploaderFingerprint);
-    if (description) formData.append("description", description);
-    if (encrypted) formData.append("encrypted", "true");
-    if (recipients && recipients.length > 0) {
-      formData.append("recipients", recipients.join(","));
-    }
+  // File operations - COMMENTED OUT
+  // async uploadFile(
+  //   file: File,
+  //   uploaderFingerprint: string,
+  //   description?: string,
+  //   encrypted?: boolean,
+  //   recipients?: string[]
+  // ): Promise<any> {
+  //   const formData = new FormData();
+  //   formData.append("file", file);
+  //   formData.append("uploader", uploaderFingerprint);
+  //   if (description) formData.append("description", description);
+  //   if (encrypted) formData.append("encrypted", "true");
+  //   if (recipients && recipients.length > 0) {
+  //     formData.append("recipients", recipients.join(","));
+  //   }
 
-    const response = await axios.post("/files/upload", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
-    return response.data;
-  }
+  //   const response = await axios.post("/files/upload", formData, {
+  //     headers: { "Content-Type": "multipart/form-data" },
+  //   });
+  //   return response.data;
+  // }
 
-  async getFiles(
-    uploader?: string,
-    contentHash?: string,
-    limit = 50,
-    offset = 0
-  ): Promise<any[]> {
-    const response = await axios.get("/files", {
-      params: { uploader, content_hash: contentHash, limit, offset },
-    });
-    return response.data || [];
-  }
+  // async getFiles(
+  //   uploader?: string,
+  //   contentHash?: string,
+  //   limit = 50,
+  //   offset = 0
+  // ): Promise<any[]> {
+  //   const response = await axios.get("/files", {
+  //     params: { uploader, content_hash: contentHash, limit, offset },
+  //   });
+  //   return response.data || [];
+  // }
 
-  async getFileMetadata(fileId: string): Promise<any> {
-    const response = await axios.get(`/files/metadata/${fileId}`);
-    return response.data;
-  }
+  // async getFileMetadata(fileId: string): Promise<any> {
+  //   const response = await axios.get(`/files/metadata/${fileId}`);
+  //   return response.data;
+  // }
 
-  async downloadFile(fileId: string): Promise<Blob> {
-    const response = await axios.get(`/files/download/${fileId}`, {
-      responseType: "blob",
-    });
-    return response.data;
-  }
+  // async downloadFile(fileId: string): Promise<Blob> {
+  //   const response = await axios.get(`/files/download/${fileId}`, {
+  //     responseType: "blob",
+  //   });
+  //   return response.data;
+  // }
 
-  async deleteFile(fileId: string): Promise<void> {
-    await axios.delete(`/files/metadata/${fileId}`);
-  }
+  // async deleteFile(fileId: string): Promise<void> {
+  //   await axios.delete(`/files/metadata/${fileId}`);
+  // }
 }
