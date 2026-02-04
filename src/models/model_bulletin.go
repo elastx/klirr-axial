@@ -21,6 +21,16 @@ type Bulletin struct {
 	CreateBulletin
 }
 
+func (m *Bulletin) In(items []Bulletin) bool {
+	for _, item := range items {
+		if m.ID == item.ID {
+			return true
+		}
+	}
+	return false
+}
+
+
 func (Bulletin) TableName() string {
 	return "bulletin_board"
 }

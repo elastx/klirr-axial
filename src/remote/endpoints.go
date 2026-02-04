@@ -56,6 +56,14 @@ func (n *API) SyncMessages() Endpoint[[]models.Message, interface{}, interface{}
 	}
 }
 
+func (n *API) SyncBulletins() Endpoint[[]models.Bulletin, interface{}, interface{}] {
+	return Endpoint[[]models.Bulletin, interface{}, interface{}]{
+		Node:    n,
+		Version: "v1",
+		Path:    "sync/bulletins",
+	}
+}
+
 func (n *API) SyncUsers() Endpoint[[]models.User, interface{}, interface{}] {
 	return Endpoint[[]models.User, interface{}, interface{}]{
 		Node:    n,

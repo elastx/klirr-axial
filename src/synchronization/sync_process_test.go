@@ -51,6 +51,28 @@ func insertMessageRawUnit(t *testing.T, db *gorm.DB, content models.Crypto) mode
     return m
 }
 
+func insertBulletinRawUnit(t *testing.T, db *gorm.DB, topic string, content models.Crypto, parentId string) models.Bulletin {
+    t.Helper()
+    b := models.Bulletin{CreateBulletin: models.CreateBulletin{Topic: topic, Content: content, ParentID: &parentId}}
+    b.Base.ID = b.Hash()
+    b.Base.BeforeCreate(nil)
+    if err := db.Session(&gorm.Session{SkipHooks: true}).Create(&b).Error; err != nil {
+        t.Fatalf("create bulletin: %v", err)
+    }
+    return b
+}
+
+func insertUserRawUnit(t *testing.T, db *gorm.DB, fingerprint string) models.User {
+    t.Helper()
+    u := models.User{Fingerprint: fingerprint}
+    u.Base.ID = u.Hash()
+    u.Base.BeforeCreate(nil)
+    if err := db.Session(&gorm.Session{SkipHooks: true}).Create(&u).Error; err != nil {
+        t.Fatalf("create user: %v", err)
+    }
+    return u
+}
+
 func randStringUnit(t *testing.T) string {
     t.Helper()
     buf := make([]byte, 8)
@@ -86,7 +108,7 @@ func TestMismatchedPeriods(t *testing.T) {
         {Period: models.Period{Start: &earlier, End: &now}, Hash: "bbb"},
     }
 
-    out := mismatchedPeriods(our, theirs)
+    out := mismatchedMessagesPeriods(our, theirs)
     if len(out) != 1 {
         t.Fatalf("expected 1 mismatched period, got %d", len(out))
     }
@@ -106,33 +128,129 @@ func TestSyncExchangeSkeleton(t *testing.T) {
     insertMessageRawUnit(t, dbB, models.Crypto(string(m2.Content))) // share m2 on B
     insertMessageRawUnit(t, dbB, models.Crypto("m3-"+randStringUnit(t)))
 
+    // Seed bulletins (synthetic content, skip hooks)
+    insertBulletinRawUnit(t, dbA, "topic1", models.Crypto("b1-"+randStringUnit(t)), "")
+    b2 := insertBulletinRawUnit(t, dbA, "topic2", models.Crypto("b2-"+randStringUnit(t)), "")
+    insertBulletinRawUnit(t, dbB, "topic2", models.Crypto(string(b2.Content)), b2.Base.ID)
+    insertBulletinRawUnit(t, dbB, "topic3", models.Crypto("b3-"+randStringUnit(t)), "")
+
+    // Seed user profiles (synthetic fingerprints, skip hooks)
+    insertUserRawUnit(t, dbA, "FP_A1_"+randStringUnit(t))
+    insertUserRawUnit(t, dbA, "FP_A2_"+randStringUnit(t))
+    insertUserRawUnit(t, dbB, "FP_A2_"+randStringUnit(t)) // share FP_A2 on B
+    insertUserRawUnit(t, dbB, "FP_B3_"+randStringUnit(t))
+
     periods, _ := startingSyncRanges()
-    hashedA, err := models.GenerateHashRanges(dbA, periods)
-    if err != nil { t.Fatalf("hash ranges A: %v", err) }
-    hashedB, err := models.GenerateHashRanges(dbB, periods)
-    if err != nil { t.Fatalf("hash ranges B: %v", err) }
+    hashedMessagesA, err := models.GetMessagesHashRanges(dbA, periods)
+    if err != nil { t.Fatalf("hash messages ranges A: %v", err) }
+
+    hashedBulletinsA, err := models.GetBulletinsHashRanges(dbA, periods)
+    if err != nil { t.Fatalf("hash bulletins ranges A: %v", err) }
+
+    hashedUsersA, err := models.GetUsersHashRanges(dbA, []models.StringRange{{Start: "", End: "zzzz"}})
+    if err != nil { t.Fatalf("hash users ranges A: %v", err) }
+
+    hashedMessagesB, err := models.GetMessagesHashRanges(dbB, periods)
+    if err != nil { t.Fatalf("hash messages ranges B: %v", err) }
+
+    hashedBulletinsB, err := models.GetBulletinsHashRanges(dbB, periods)
+    if err != nil { t.Fatalf("hash bulletins ranges B: %v", err) }
+
+    hashedUsersB, err := models.GetUsersHashRanges(dbB, []models.StringRange{{Start: "", End: "zzzz"}})
+    if err != nil { t.Fatalf("hash users ranges B: %v", err) }
 
     nodeA := remote.API{Address: "nodeA"}
     nodeB := remote.API{Address: "nodeB"}
 
     // Round 1: A pulls from B and computes messages to send to B
     models.DB = dbA.Session(&gorm.Session{SkipHooks: true})
-    missingForBFromA, err := SyncWithRequester(fakeRequester{DB: dbB}, nodeB, hashedA, nil)
+    missingMessagesForBFromA, missingBulletinsForBFromA, missingUsersForBFromA, err := SyncWithRequester(fakeRequester{DB: dbB}, nodeB, hashedMessagesA, hashedBulletinsA, hashedUsersA)
     if err != nil { t.Fatalf("sync A->B: %v", err) }
     // Apply remote messages to A
-    for _, m := range missingForBFromA {
+    for _, m := range missingMessagesForBFromA {
         if err := dbB.Session(&gorm.Session{SkipHooks: true}).Create(&m).Error; err != nil && !isDuplicateUnit(err) {
             t.Fatalf("apply A->B message: %v", err)
+        }
+    }
+    for _, b := range missingBulletinsForBFromA {
+        if err := dbB.Session(&gorm.Session{SkipHooks: true}).Create(&b).Error; err != nil && !isDuplicateUnit(err) {
+            t.Fatalf("apply A->B bulletin: %v", err)
+        }
+    }
+    for _, u := range missingUsersForBFromA {
+        if err := dbB.Session(&gorm.Session{SkipHooks: true}).Create(&u).Error; err != nil && !isDuplicateUnit(err) {
+            t.Fatalf("apply A->B user: %v", err)
         }
     }
 
     // Round 2: B pulls from A and applies
     models.DB = dbB.Session(&gorm.Session{SkipHooks: true})
-    missingForAFromB, err := SyncWithRequester(fakeRequester{DB: dbA}, nodeA, hashedB, nil)
+    missingMessagesForAFromB, missingBulletinsForAFromB, missingUsersForAFromB, err := SyncWithRequester(fakeRequester{DB: dbA}, nodeA, hashedMessagesB, hashedBulletinsB, hashedUsersB)
     if err != nil { t.Fatalf("sync B->A: %v", err) }
-    for _, m := range missingForAFromB {
+    for _, m := range missingMessagesForAFromB {
         if err := dbA.Session(&gorm.Session{SkipHooks: true}).Create(&m).Error; err != nil && !isDuplicateUnit(err) {
             t.Fatalf("apply B->A message: %v", err)
         }
+    }
+    for _, b := range missingBulletinsForAFromB {
+        if err := dbA.Session(&gorm.Session{SkipHooks: true}).Create(&b).Error; err != nil && !isDuplicateUnit(err) {
+            t.Fatalf("apply B->A bulletin: %v", err)
+        }
+    }
+    for _, u := range missingUsersForAFromB {
+        if err := dbA.Session(&gorm.Session{SkipHooks: true}).Create(&u).Error; err != nil && !isDuplicateUnit(err) {
+            t.Fatalf("apply B->A user: %v", err)
+        }
+    }
+
+    // both DBs should have all 3 messages
+    var countA int64
+    if err := dbA.Model(&models.Message{}).Count(&countA).Error; err != nil {
+        t.Fatalf("count messages A: %v", err)
+    }
+    if countA != 3 {
+        t.Fatalf("expected 3 messages in A, got %d", countA)
+    }
+
+    var countB int64
+    if err := dbB.Model(&models.Message{}).Count(&countB).Error; err != nil {
+        t.Fatalf("count messages B: %v", err)
+    }
+    if countB != 3 {
+        t.Fatalf("expected 3 messages in B, got %d", countB)
+    }
+
+    // both DBs should have all 3 bulletins
+    var bcountA int64
+    if err := dbA.Model(&models.Bulletin{}).Count(&bcountA).Error; err != nil {
+        t.Fatalf("count bulletins A: %v", err)
+    }
+    if bcountA != 3 {
+        t.Fatalf("expected 3 bulletins in A, got %d", bcountA)
+    }
+
+    var bcountB int64
+    if err := dbB.Model(&models.Bulletin{}).Count(&bcountB).Error; err != nil {
+        t.Fatalf("count bulletins B: %v", err)
+    }
+    if bcountB != 3 {
+        t.Fatalf("expected 3 bulletins in B, got %d", bcountB)
+    }
+
+    // both DBs should have all 3 users
+    var ucountA int64
+    if err := dbA.Model(&models.User{}).Count(&ucountA).Error; err != nil {
+        t.Fatalf("count users A: %v", err)
+    }
+    if ucountA != 3 {
+        t.Fatalf("expected 3 users in A, got %d", ucountA)
+    }
+
+    var ucountB int64
+    if err := dbB.Model(&models.User{}).Count(&ucountB).Error; err != nil {
+        t.Fatalf("count users B: %v", err)
+    }
+    if ucountB != 3 {
+        t.Fatalf("expected 3 users in B, got %d", ucountB)
     }
 }

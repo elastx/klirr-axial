@@ -16,17 +16,22 @@ const (
 )
 
 type SyncRequest struct {
-	Ranges []models.HashedPeriod `json:"ranges"`
-	Users  []models.StringRange  `json:"users"`
+	MessageRanges  []models.HashedPeriod `json:"message_ranges"`
+	BulletinRanges []models.HashedPeriod `json:"bulletin_ranges,omitempty"`
+	Users          []models.HashedUsersRange  `json:"users"`
+	Files          []models.HashedFilesRange  `json:"files,omitempty"`
 }
 
 type SyncResponse struct {
 	Hashes          models.HashSet            `json:"hash"`
 	IsBusy          bool                      `json:"is_busy"`
-	Ranges          []models.HashedPeriod     `json:"ranges,omitempty"`
+	MessageRanges   []models.HashedPeriod     `json:"message_ranges,omitempty"`
 	Messages        []models.MessagesPeriod   `json:"messages,omitempty"`
+	BulletinRanges  []models.HashedPeriod     `json:"bulletin_ranges,omitempty"`
+	Bulletins       []models.BulletinsPeriod  `json:"bulletins,omitempty"`
 	UserRangeHashes []models.HashedUsersRange `json:"user_range_hashes,omitempty"`
 	Users           []models.UsersRange       `json:"users,omitempty"`
+	Files           []models.FilesRange       `json:"files,omitempty"`
 }
 
 func handleSync(w http.ResponseWriter, r *http.Request) {
@@ -74,46 +79,41 @@ func handleSyncRequest(w http.ResponseWriter, r *http.Request) {
 // for a given request and database. It is used by the HTTP handler and can be
 // reused by tests to simulate in-memory sync exchanges without HTTP.
 func ComputeSyncResponse(db *gorm.DB, req SyncRequest) (SyncResponse, error) {
-	periods := []models.Period{}
-	for _, period := range req.Ranges {
-		periods = append(periods, models.Period{
+
+	// Messages
+	messagePeriods := []models.Period{}
+	for _, period := range req.MessageRanges {
+		messagePeriods = append(messagePeriods, models.Period{
 			Start: period.Start,
 			End:   period.End,
 		})
 	}
-	fmt.Printf("Received %d time ranges to check\n", len(periods))
+	fmt.Printf("Received %d time ranges to check\n", len(messagePeriods))
 
 	// Generate our hashes for the same ranges
-	ourRanges, err := models.GenerateHashRanges(db, periods)
+	ourMessagesHashRanges, err := models.GetMessagesHashRanges(db, messagePeriods)
 	if err != nil {
 		return SyncResponse{}, fmt.Errorf("failed to generate hash ranges: %v", err)
 	}
-	fmt.Printf("Generated %d hash ranges\n", len(ourRanges))
+	fmt.Printf("Generated %d message hash ranges\n", len(ourMessagesHashRanges))
 
-	mismatchingRanges := []models.HashedPeriod{}
-	for _, ourRange := range ourRanges {
+	missmatchingMessagesRanges := []models.HashedPeriod{}
+	for _, ourRange := range ourMessagesHashRanges {
 		ourStart := models.RealizeStart(ourRange.Start)
 		ourEnd := models.RealizeEnd(ourRange.End)
-		for _, theirRange := range req.Ranges {
+		for _, theirRange := range req.MessageRanges {
 			theirStart := models.RealizeStart(theirRange.Start)
 			theirEnd := models.RealizeEnd(theirRange.End)
-			if ourStart == theirStart && ourEnd == theirEnd {
-				fmt.Printf("Checking period ours: %v to %v, theirs: %v to %v\n", ourStart, ourEnd, theirStart, theirEnd)
+			if ourStart.Equal(theirStart) && ourEnd.Equal(theirEnd) {
 				if ourRange.Hash != theirRange.Hash {
 					fmt.Printf("Found mismatching hash for range %v to %v (our hash: %s, their hash: %s)\n",
 						ourStart, ourEnd, ourRange.Hash, theirRange.Hash)
-					mismatchingRanges = append(mismatchingRanges, ourRange)
-				} else {
-					fmt.Printf("No mismatching hash for range %v to %v (our hash: %s, their hash: %s)\n",
-						ourStart, ourEnd, ourRange.Hash, theirRange.Hash)
+					missmatchingMessagesRanges = append(missmatchingMessagesRanges, ourRange)
 				}
-			} else {
-				fmt.Printf("Periods do not match: ours: %v to %v, theirs: %v to %v\n",
-					ourStart, ourEnd, theirStart, theirEnd)
 			}
 		}
 	}
-	fmt.Printf("Found %d mismatching ranges\n", len(mismatchingRanges))
+	fmt.Printf("Found %d mismatching message hash ranges\n", len(missmatchingMessagesRanges))
 
 	// Compare hashes and prepare response
 	resp := SyncResponse{}
@@ -124,7 +124,7 @@ func ComputeSyncResponse(db *gorm.DB, req SyncRequest) (SyncResponse, error) {
 	fmt.Printf("Our database hashes: %+v\n", resp.Hashes)
 
 	counts := map[int]int64{}
-	for index, mismatchingRange := range mismatchingRanges {
+	for index, mismatchingRange := range missmatchingMessagesRanges {
 		period := models.Period{
 			Start: mismatchingRange.Start,
 			End:   mismatchingRange.End,
@@ -145,7 +145,7 @@ func ComputeSyncResponse(db *gorm.DB, req SyncRequest) (SyncResponse, error) {
 	totalPlainMessages := int64(0)
 
 	for _, index := range indicesSortedByCount {
-		mismatchingRange := mismatchingRanges[index]
+		mismatchingRange := missmatchingMessagesRanges[index]
 		// Try to return as many messages as possible
 		if totalPlainMessages+counts[index] < maxBatchSize {
 			fmt.Printf("Getting messages for range %d (count: %d, total so far: %d)\n",
@@ -174,19 +174,119 @@ func ComputeSyncResponse(db *gorm.DB, req SyncRequest) (SyncResponse, error) {
 			fmt.Printf("Splitting range into %d parts\n", splits)
 			periods := models.SplitTimeRange(mismatchingRange.Period, splits)
 			for _, period := range periods {
-				hashedPeriods, err := models.GenerateHashRanges(db, []models.Period{period})
+				hashedMessagePeriods, err := models.GetMessagesHashRanges(db, []models.Period{period})
 				if err != nil {
 					return SyncResponse{}, fmt.Errorf("failed to generate hash ranges for split: %v", err)
 				}
-				for _, hashedPeriod := range hashedPeriods {
-					resp.Ranges = append(resp.Ranges, models.HashedPeriod{
-						Period: hashedPeriod.Period,
-						Hash:   hashedPeriod.Hash,
+				for _, hashedMessagesPeriod := range hashedMessagePeriods {
+					resp.MessageRanges = append(resp.MessageRanges, models.HashedPeriod{
+						Period: hashedMessagesPeriod.Period,
+						Hash:   hashedMessagesPeriod.Hash,
 					})
 				}
 			}
 		}
 	}
+
+	// Bulletins (similar logic can be added here)
+	bulletinPeriods := []models.Period{}
+	for _, period := range req.BulletinRanges {
+		bulletinPeriods = append(bulletinPeriods, models.Period{
+			Start: period.Start,
+			End:   period.End,
+		})
+	}
+	fmt.Printf("Received %d bulletin ranges to check\n", len(bulletinPeriods))
+
+	ourBulletinHashRanges, err := models.GetBulletinsHashRanges(db, bulletinPeriods)
+	if err != nil {
+		return SyncResponse{}, fmt.Errorf("failed to generate bulletin hash ranges: %v", err)
+	}
+	fmt.Printf("Generated %d bulletin hash ranges\n", len(ourBulletinHashRanges))
+
+	mismatchingBulletinRanges := []models.HashedPeriod{}
+	for _, ourRange := range ourBulletinHashRanges {
+		ourStart := models.RealizeStart(ourRange.Start)
+		ourEnd := models.RealizeEnd(ourRange.End)
+		for _, theirRange := range req.BulletinRanges {
+			theirStart := models.RealizeStart(theirRange.Start)
+			theirEnd := models.RealizeEnd(theirRange.End)
+			if ourStart == theirStart && ourEnd == theirEnd {
+				if ourRange.Hash != theirRange.Hash {
+					fmt.Printf("Found mismatching hash for bulletin range %v to %v (our hash: %s, their hash: %s)\n",
+						ourStart, ourEnd, ourRange.Hash, theirRange.Hash)
+					mismatchingBulletinRanges = append(mismatchingBulletinRanges, ourRange)
+				}
+			}
+		}
+	}
+	fmt.Printf("Found %d mismatching bulletin hash ranges\n", len(mismatchingBulletinRanges))
+
+	for _, mismatchingRange := range mismatchingBulletinRanges {
+		period := models.Period{
+			Start: mismatchingRange.Start,
+			End:   mismatchingRange.End,
+		}
+		bulletins, err := models.GetBulletinsByPeriod(db, period)
+		if err != nil {
+			return SyncResponse{}, fmt.Errorf("failed to get bulletins: %v", err)
+		}
+
+		bulletinsPeriod := models.BulletinsPeriod{
+			Period:    mismatchingRange.Period,
+			Bulletins: bulletins,
+		}
+		resp.Bulletins = append(resp.Bulletins, bulletinsPeriod)
+	}
+
+	// Users
+	userRanges := []models.StringRange{}
+	for _, ur := range req.Users {
+		userRanges = append(userRanges, models.StringRange{
+			Start: ur.Start,
+			End:   ur.End,
+		})
+	}
+	fmt.Printf("Received %d user ranges to check\n", len(userRanges))
+
+	ourUserRangeHashes, err := models.GetUsersHashRanges(db, userRanges)
+	if err != nil {
+		return SyncResponse{}, fmt.Errorf("failed to generate user range hashes: %v", err)
+	}
+	fmt.Printf("Generated %d user range hashes\n", len(ourUserRangeHashes))
+
+	mismatchingUserRanges := []models.HashedUsersRange{}
+	for _, ourRange := range ourUserRangeHashes {
+		ourStart := ourRange.Start
+		ourEnd := ourRange.End
+		for _, theirRange := range req.Users {
+			theirStart := theirRange.Start
+			theirEnd := theirRange.End
+			if ourStart == theirStart && ourEnd == theirEnd {
+				if ourRange.Hash != theirRange.Hash {
+					fmt.Printf("Found mismatching hash for user range %s to %s (our hash: %s, their hash: %s)\n",
+						ourStart, ourEnd, ourRange.Hash, theirRange.Hash)
+					mismatchingUserRanges = append(mismatchingUserRanges, ourRange)
+				}
+			}
+		}
+	}
+	fmt.Printf("Found %d mismatching user ranges\n", len(mismatchingUserRanges))
+	for _, mismatchingRange := range mismatchingUserRanges {
+		users, err := models.GetUsersByFingerprintRange(db, mismatchingRange.StringRange.Start, mismatchingRange.StringRange.End)
+		if err != nil {
+			return SyncResponse{}, fmt.Errorf("failed to get users: %v", err)
+		}
+
+		usersRange := models.UsersRange{
+			StringRange: mismatchingRange.StringRange,
+			Users:       users,
+		}
+		resp.Users = append(resp.Users, usersRange)
+	}
+
+	// Files
+	// Skipped for now since it's too dissimilar to database stuff.
 
 	return resp, nil
 }
