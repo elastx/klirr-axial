@@ -46,7 +46,8 @@ func (c* Crypto) Analyze() (Fingerprint, []Fingerprint, bool, bool, error) {
 	
 	recipientStrings, _ := message.GetHexEncryptionKeyIDs()
 	for _, r := range recipientStrings {
-		recipients = append(recipients, Fingerprint(r))
+		if r == "" { continue }
+		recipients = append(recipients, Fingerprint(strings.ToLower(r)))
 	}
 	if len(recipients) > 0 {
 		encrypted = true
@@ -54,7 +55,8 @@ func (c* Crypto) Analyze() (Fingerprint, []Fingerprint, bool, bool, error) {
 
 	senderStrings, _ := message.GetHexSignatureKeyIDs()
 	if len(senderStrings) > 0 {
-		sender = Fingerprint(senderStrings[0])
+		s := senderStrings[0]
+		if s != "" { sender = Fingerprint(strings.ToLower(s)) }
 		signed = true
 	}
 

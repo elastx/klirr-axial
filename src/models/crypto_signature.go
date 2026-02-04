@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/ProtonMail/gopenpgp/v2/crypto"
 )
@@ -27,7 +28,7 @@ func (s* Signature) GetSignerFingerprint() (Fingerprint, error) {
 		return "", fmt.Errorf("signature must have exactly one key ID")
 	}
 
-	return Fingerprint(signer[0]), nil
+	return Fingerprint(strings.ToLower(signer[0])), nil
 }
 
 func (s* Signature) Verify(publicKey PublicKey) error {
