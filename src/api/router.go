@@ -42,7 +42,7 @@ func RegisterRoutes() {
 	http.HandleFunc("/v1/sync/messages", handleSyncMessages)
 	http.HandleFunc("/v1/sync/bulletins", handleSyncBulletins)
 	http.HandleFunc("/v1/sync/users", handleSyncUsers)
-	http.HandleFunc("/v1/sync/files", handleSyncFiles)
+	// http.HandleFunc("/v1/sync/files", handleSyncFiles)
 
 	// User routes
 	http.HandleFunc("/v1/users/search", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
@@ -111,44 +111,44 @@ func RegisterRoutes() {
 		}
 	}))
 
-	// File routes
-	http.HandleFunc("/v1/files/upload", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("File upload endpoint: %s %s", r.Method, r.URL.Path)
-		if r.Method == http.MethodPost {
-			handleUploadFile(w, r)
-		} else {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	}))
+	// File routes - COMMENTED OUT
+	// http.HandleFunc("/v1/files/upload", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+	// 	log.Printf("File upload endpoint: %s %s", r.Method, r.URL.Path)
+	// 	if r.Method == http.MethodPost {
+	// 		handleUploadFile(w, r)
+	// 	} else {
+	// 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	// 	}
+	// }))
 
-	http.HandleFunc("/v1/files/download/", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("File download endpoint: %s %s", r.Method, r.URL.Path)
-		if r.Method == http.MethodGet {
-			handleDownloadFile(w, r)
-		} else {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	}))
+	// http.HandleFunc("/v1/files/download/", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+	// 	log.Printf("File download endpoint: %s %s", r.Method, r.URL.Path)
+	// 	if r.Method == http.MethodGet {
+	// 		handleDownloadFile(w, r)
+	// 	} else {
+	// 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	// 	}
+	// }))
 
-	http.HandleFunc("/v1/files/metadata/", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("File metadata endpoint: %s %s", r.Method, r.URL.Path)
-		if r.Method == http.MethodGet {
-			handleGetFileMetadata(w, r)
-		} else if r.Method == http.MethodDelete {
-			handleDeleteFile(w, r)
-		} else {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	}))
+	// http.HandleFunc("/v1/files/metadata/", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+	// 	log.Printf("File metadata endpoint: %s %s", r.Method, r.URL.Path)
+	// 	if r.Method == http.MethodGet {
+	// 		handleGetFileMetadata(w, r)
+	// 	} else if r.Method == http.MethodDelete {
+	// 		handleDeleteFile(w, r)
+	// 	} else {
+	// 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	// 	}
+	// }))
 
-	http.HandleFunc("/v1/files", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("Files list endpoint: %s %s", r.Method, r.URL.Path)
-		if r.Method == http.MethodGet {
-			handleGetFiles(w, r)
-		} else {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	}))
+	// http.HandleFunc("/v1/files", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+	// 	log.Printf("Files list endpoint: %s %s", r.Method, r.URL.Path)
+	// 	if r.Method == http.MethodGet {
+	// 		handleGetFiles(w, r)
+	// 	} else {
+	// 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	// 	}
+	// }))
 	
-	log.Printf("Routes registered: / (SPA + static files), /v1/users, /v1/messages, /v1/bulletin, /v1/files")
+	log.Printf("Routes registered: / (SPA + static files), /v1/users, /v1/messages, /v1/bulletin")
 } 

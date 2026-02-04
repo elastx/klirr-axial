@@ -24,14 +24,14 @@ import {
   IconLogout,
   IconNotes,
   IconBrandGravatar,
-  IconFiles,
+  // IconFiles,
 } from "@tabler/icons-react";
 import { GPGService } from "../services/gpg";
 import { UserList } from "./UserList";
 import { Messages } from "./Messages";
 import { UserSettings } from "./KeyManagement";
 import { BulletinBoard } from "./BulletinBoard";
-import { FileManager } from "./FileManager";
+// import { FileManager } from "./FileManager";
 import classes from "./Layout.module.css";
 import AvatarGrid from "./avatar/AvatarGrid";
 import UserAvatar from "./avatar/UserAvatar";
@@ -88,13 +88,13 @@ export function Layout() {
       id: "bulletin",
       path: "/bulletin",
     },
-    {
-      icon: <IconFiles size={rem(18)} />,
-      color: "orange",
-      label: "Files",
-      id: "files",
-      path: "/files",
-    },
+    // {
+    //   icon: <IconFiles size={rem(18)} />,
+    //   color: "orange",
+    //   label: "Files",
+    //   id: "files",
+    //   path: "/files",
+    // },
     {
       icon: <IconKey size={rem(18)} />,
       color: "violet",
@@ -175,7 +175,7 @@ export function Layout() {
           <Route path="/users" element={<UserList />} />
           <Route path="/messages" element={<Messages />} />
           <Route path="/bulletin" element={<BulletinBoard />} />
-          <Route path="/files" element={<FileManager />} />
+          {/* <Route path="/files" element={<FileManager />} /> */}
           <Route path="/keys" element={<UserSettings />} />
           <Route path="/avatar" element={<AvatarGrid />} />
           <Route path="/" element={<Navigate to="/users" replace />} />
