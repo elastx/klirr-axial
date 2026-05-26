@@ -6,11 +6,34 @@ import (
 	"fmt"
 )
 
-type Fingerprints []Fingerprint
+// GORM Scanner/Valuer adapters for the PGP types declared in crypto.go.
+// Fingerprint stores as TEXT; Fingerprints stores as JSON.
 
-// Value stores the slice as JSON in the DB
+// --- Fingerprint -------------------------------------------------------------
+
+func (f Fingerprint) Value() (driver.Value, error) {
+	return string(f), nil
+}
+
+func (f *Fingerprint) Scan(value interface{}) error {
+	switch v := value.(type) {
+	case string:
+		*f = Fingerprint(v)
+		return nil
+	case []byte:
+		*f = Fingerprint(string(v))
+		return nil
+	case nil:
+		*f = ""
+		return nil
+	default:
+		return fmt.Errorf("unsupported Scan type for Fingerprint: %T", value)
+	}
+}
+
+// --- Fingerprints ------------------------------------------------------------
+
 func (fs Fingerprints) Value() (driver.Value, error) {
-	// convert to []string for clean JSON
 	arr := make([]string, len(fs))
 	for i, f := range fs {
 		arr[i] = string(f)
@@ -22,7 +45,6 @@ func (fs Fingerprints) Value() (driver.Value, error) {
 	return string(b), nil
 }
 
-// Scan loads the slice from JSON stored in the DB
 func (fs *Fingerprints) Scan(value interface{}) error {
 	switch v := value.(type) {
 	case string:

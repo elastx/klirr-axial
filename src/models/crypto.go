@@ -7,9 +7,89 @@ import (
 	"github.com/ProtonMail/gopenpgp/v2/crypto"
 )
 
-type Crypto string;
+// PGP domain types. All five are string-aliased identifiers or armored PGP
+// blobs that carry meaning derived from their content. The GORM Scanner/Valuer
+// adapters for Fingerprint and Fingerprints live in crypto_persistence.go.
 
-func (c* Crypto) Analyze() (Fingerprint, []Fingerprint, bool, bool, error) {
+type Crypto string
+
+type Fingerprint string
+
+type Fingerprints []Fingerprint
+
+type PublicKey string
+
+type Signature string
+
+// --- PublicKey ---------------------------------------------------------------
+
+func (pk *PublicKey) PGP() (*crypto.Key, error) {
+	return crypto.NewKeyFromArmored(string(*pk))
+}
+
+func (pk *PublicKey) GetFingerprint() (Fingerprint, error) {
+	key, err := pk.PGP()
+	if err != nil {
+		return "", err
+	}
+
+	return Fingerprint(key.GetHexKeyID()), nil
+}
+
+// --- Signature ---------------------------------------------------------------
+
+func (s *Signature) PGP() (*crypto.PGPSignature, error) {
+	return crypto.NewPGPSignatureFromArmored(string(*s))
+}
+
+func (s *Signature) GetSignerFingerprint() (Fingerprint, error) {
+	signature, err := s.PGP()
+	if err != nil {
+		return "", err
+	}
+
+	signer, ok := signature.GetHexSignatureKeyIDs()
+	if !ok {
+		return "", fmt.Errorf("signature does not contain a key ID")
+	}
+
+	if len(signer) != 1 {
+		return "", fmt.Errorf("signature must have exactly one key ID")
+	}
+
+	return Fingerprint(signer[0]), nil
+}
+
+func (s *Signature) Verify(publicKey PublicKey) error {
+	signature, err := s.PGP()
+	if err != nil {
+		return err
+	}
+
+	key, err := publicKey.PGP()
+	if err != nil {
+		return err
+	}
+
+	signatureKey, ok := signature.GetHexSignatureKeyIDs()
+	if !ok {
+		return fmt.Errorf("signature does not contain a key ID")
+	}
+
+	if len(signatureKey) != 1 {
+		return fmt.Errorf("signature must have exactly one key ID")
+	}
+
+	if signatureKey[0] != key.GetFingerprint() {
+		return fmt.Errorf("signature key ID does not match public key")
+	}
+
+	return nil
+}
+
+// --- Crypto (armored PGP message analyzer) -----------------------------------
+
+func (c *Crypto) Analyze() (Fingerprint, []Fingerprint, bool, bool, error) {
 	sender := Fingerprint("")
 	recipients := []Fingerprint{}
 	encrypted := false
@@ -21,8 +101,8 @@ func (c* Crypto) Analyze() (Fingerprint, []Fingerprint, bool, bool, error) {
 		// Attempt to parse clearsigned message
 		content := string(*c)
 		if strings.Contains(content, "-----BEGIN PGP SIGNED MESSAGE-----") &&
-		   strings.Contains(content, "-----BEGIN PGP SIGNATURE-----") &&
-		   strings.Contains(content, "-----END PGP SIGNATURE-----") {
+			strings.Contains(content, "-----BEGIN PGP SIGNATURE-----") &&
+			strings.Contains(content, "-----END PGP SIGNATURE-----") {
 			// Extract signature block
 			sigStart := strings.Index(content, "-----BEGIN PGP SIGNATURE-----")
 			sigEnd := strings.Index(content, "-----END PGP SIGNATURE-----")
@@ -43,7 +123,7 @@ func (c* Crypto) Analyze() (Fingerprint, []Fingerprint, bool, bool, error) {
 		}
 		return sender, recipients, encrypted, signed, fmt.Errorf("invalid PGP message: %w", err)
 	}
-	
+
 	recipientStrings, _ := message.GetHexEncryptionKeyIDs()
 	for _, r := range recipientStrings {
 		recipients = append(recipients, Fingerprint(r))
@@ -60,4 +140,3 @@ func (c* Crypto) Analyze() (Fingerprint, []Fingerprint, bool, bool, error) {
 
 	return sender, recipients, encrypted, signed, nil
 }
-
