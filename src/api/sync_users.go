@@ -1,16 +1,17 @@
 package api
 
 import (
-	"axial/models"
 	"encoding/json"
 	"net/http"
+
+	"axial/models"
 )
 
 type SyncUsersRequest struct {
 	Users []models.User `json:"users"`
 }
 
-func handleSyncUsers(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSyncUsers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -22,16 +23,13 @@ func handleSyncUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate required fields
 	if len(req.Users) == 0 {
 		http.Error(w, "Users are required", http.StatusBadRequest)
 		return
 	}
 
-	// Create users
 	for _, user := range req.Users {
-		if err := models.DB.Create(&user).Error; err != nil {
-			// Ignore duplicate errors
+		if err := s.DB.Create(&user).Error; err != nil {
 			if models.IsDuplicateError(err) {
 				continue
 			}
@@ -40,8 +38,7 @@ func handleSyncUsers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	models.RefreshHashes(models.DB)
+	models.RefreshHashes(s.DB)
 
 	w.WriteHeader(http.StatusCreated)
-
 }

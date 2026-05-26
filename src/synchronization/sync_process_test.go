@@ -177,8 +177,8 @@ func TestSyncExchangeSkeleton(t *testing.T) {
 	nodeB := remote.API{Address: "nodeB"}
 
 	// Round 1: A pulls from B and computes messages to send to B
-	models.DB = dbA.Session(&gorm.Session{SkipHooks: true})
-	missingMessagesForBFromA, missingBulletinsForBFromA, missingUsersForBFromA, err := SyncWithRequester(fakeRequester{DB: dbB}, nodeB, hashedMessagesA, hashedBulletinsA, hashedUsersA)
+	dbARaw := dbA.Session(&gorm.Session{SkipHooks: true})
+	missingMessagesForBFromA, missingBulletinsForBFromA, missingUsersForBFromA, err := SyncWithRequester(dbARaw, fakeRequester{DB: dbB}, nodeB, hashedMessagesA, hashedBulletinsA, hashedUsersA)
 	if err != nil {
 		t.Fatalf("sync A->B: %v", err)
 	}
@@ -200,8 +200,8 @@ func TestSyncExchangeSkeleton(t *testing.T) {
 	}
 
 	// Round 2: B pulls from A and applies
-	models.DB = dbB.Session(&gorm.Session{SkipHooks: true})
-	missingMessagesForAFromB, missingBulletinsForAFromB, missingUsersForAFromB, err := SyncWithRequester(fakeRequester{DB: dbA}, nodeA, hashedMessagesB, hashedBulletinsB, hashedUsersB)
+	dbBRaw := dbB.Session(&gorm.Session{SkipHooks: true})
+	missingMessagesForAFromB, missingBulletinsForAFromB, missingUsersForAFromB, err := SyncWithRequester(dbBRaw, fakeRequester{DB: dbA}, nodeA, hashedMessagesB, hashedBulletinsB, hashedUsersB)
 	if err != nil {
 		t.Fatalf("sync B->A: %v", err)
 	}

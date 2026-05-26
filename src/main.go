@@ -20,29 +20,23 @@ func main() {
 
 	nodeID := cfg.NodeID
 	if nodeID == "" {
-		// Default to hostname
 		nodeID, _ = os.Hostname()
 	}
 
-	// Initialize database connection
-	err = models.InitDB(cfg.Database)
+	db, err := models.InitDB(cfg.Database)
 	if err != nil {
 		panic(fmt.Errorf("failed to initialize database: %v", err))
 	}
 
 	fmt.Printf("Starting node %s\n", nodeID)
 
-	// Calculate initial hash
-	err = models.RefreshHashes(models.DB)
-	if err != nil {
+	if err := models.RefreshHashes(db); err != nil {
 		panic(fmt.Errorf("failed to calculate database hash: %v", err))
 	}
 
 	hashes := models.GetHashes()
-
 	fmt.Printf("Node %s hash: %s\n", nodeID, hashes.Full)
 
-	// Create single multicast socket
 	connections, err := discovery.CreateMulticastSockets(cfg)
 	if err != nil {
 		panic(err)
@@ -50,14 +44,12 @@ func main() {
 
 	for _, conn := range connections {
 		defer conn.Conn.Close()
-		go discovery.StartMulticastListener(cfg, &conn)
+		go discovery.StartMulticastListener(cfg, &conn, db)
 		go discovery.StartBroadcast(cfg, &conn)
 	}
 
-	// Register API routes
-	api.RegisterRoutes()
+	api.NewServer(db).RegisterRoutes()
 
-	// Start server
 	port := 8080
 	fmt.Printf("Server starting on port %d...\n", port)
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil); err != nil {

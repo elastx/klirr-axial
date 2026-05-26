@@ -32,8 +32,7 @@ type SyncResponse struct {
 	Users           []models.UsersRange       `json:"users,omitempty"`
 }
 
-func handleSync(w http.ResponseWriter, r *http.Request) {
-	// Check if we're busy
+func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 	if models.IsSyncing() {
 		json.NewEncoder(w).Encode(SyncResponse{
 			IsBusy: true,
@@ -42,13 +41,13 @@ func handleSync(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPost {
-		handleSyncRequest(w, r)
+		s.handleSyncRequest(w, r)
 	} else {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
-func handleSyncRequest(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSyncRequest(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("Handling sync request...\n")
 	if !models.StartSync() {
 		fmt.Printf("Sync already in progress, returning busy response\n")
@@ -65,7 +64,7 @@ func handleSyncRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
-	resp, err := ComputeSyncResponse(models.DB, req)
+	resp, err := ComputeSyncResponse(s.DB, req)
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
