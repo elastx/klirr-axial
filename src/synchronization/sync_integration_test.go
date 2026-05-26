@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"axial/api"
+	"axial/hashrange"
 	"axial/models"
 	"axial/remote"
 	"strings"
@@ -165,7 +166,7 @@ func TestFullSyncConverges(t *testing.T) {
     insertMessage(t, dbB, m3)
 
     // Prepare ranges
-    periods, _ := startingSyncRanges()
+    periods := hashrange.InitialPeriods()
     hashedA, err := models.GenerateHashRanges(dbA, periods)
     if err != nil { t.Fatalf("hash ranges A: %v", err) }
     hashedB, err := models.GenerateHashRanges(dbB, periods)

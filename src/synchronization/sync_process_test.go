@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"axial/api"
+	"axial/hashrange"
 	"axial/models"
 	"axial/remote"
 
@@ -103,14 +104,14 @@ func TestMismatchedPeriods(t *testing.T) {
 	now := time.Now().UTC()
 	earlier := now.Add(-24 * time.Hour)
 
-	our := []models.HashedPeriod{
-		{Period: models.Period{Start: &earlier, End: &now}, Hash: "aaa"},
+	our := []hashrange.HashedPeriod{
+		{Period: hashrange.Period{Start: &earlier, End: &now}, Hash: "aaa"},
 	}
-	theirs := []models.HashedPeriod{
-		{Period: models.Period{Start: &earlier, End: &now}, Hash: "bbb"},
+	theirs := []hashrange.HashedPeriod{
+		{Period: hashrange.Period{Start: &earlier, End: &now}, Hash: "bbb"},
 	}
 
-	out := mismatchedMessagesPeriods(our, theirs)
+	out := hashrange.MismatchedPeriods(our, theirs)
 	if len(out) != 1 {
 		t.Fatalf("expected 1 mismatched period, got %d", len(out))
 	}
@@ -142,7 +143,7 @@ func TestSyncExchangeSkeleton(t *testing.T) {
 	insertUserRawUnit(t, dbB, "FP_A2_"+randStringUnit(t)) // share FP_A2 on B
 	insertUserRawUnit(t, dbB, "FP_B3_"+randStringUnit(t))
 
-	periods, _ := startingSyncRanges()
+	periods := hashrange.InitialPeriods()
 	hashedMessagesA, err := models.GetMessagesHashRanges(dbA, periods)
 	if err != nil {
 		t.Fatalf("hash messages ranges A: %v", err)
@@ -153,7 +154,7 @@ func TestSyncExchangeSkeleton(t *testing.T) {
 		t.Fatalf("hash bulletins ranges A: %v", err)
 	}
 
-	hashedUsersA, err := models.GetUsersHashRanges(dbA, []models.StringRange{{Start: "", End: "zzzz"}})
+	hashedUsersA, err := models.GetUsersHashRanges(dbA, []hashrange.StringRange{{Start: "", End: "zzzz"}})
 	if err != nil {
 		t.Fatalf("hash users ranges A: %v", err)
 	}
@@ -168,7 +169,7 @@ func TestSyncExchangeSkeleton(t *testing.T) {
 		t.Fatalf("hash bulletins ranges B: %v", err)
 	}
 
-	hashedUsersB, err := models.GetUsersHashRanges(dbB, []models.StringRange{{Start: "", End: "zzzz"}})
+	hashedUsersB, err := models.GetUsersHashRanges(dbB, []hashrange.StringRange{{Start: "", End: "zzzz"}})
 	if err != nil {
 		t.Fatalf("hash users ranges B: %v", err)
 	}

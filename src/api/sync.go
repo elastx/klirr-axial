@@ -1,6 +1,7 @@
 package api
 
 import (
+	"axial/hashrange"
 	"axial/models"
 	"encoding/json"
 	"fmt"
@@ -16,20 +17,20 @@ const (
 )
 
 type SyncRequest struct {
-	MessageRanges  []models.HashedPeriod     `json:"message_ranges"`
-	BulletinRanges []models.HashedPeriod     `json:"bulletin_ranges,omitempty"`
-	Users          []models.HashedUsersRange `json:"users"`
+	MessageRanges  []hashrange.HashedPeriod     `json:"message_ranges"`
+	BulletinRanges []hashrange.HashedPeriod     `json:"bulletin_ranges,omitempty"`
+	Users          []hashrange.HashedUsersRange `json:"users"`
 }
 
 type SyncResponse struct {
-	Hashes          models.HashSet            `json:"hash"`
-	IsBusy          bool                      `json:"is_busy"`
-	MessageRanges   []models.HashedPeriod     `json:"message_ranges,omitempty"`
-	Messages        []models.MessagesPeriod   `json:"messages,omitempty"`
-	BulletinRanges  []models.HashedPeriod     `json:"bulletin_ranges,omitempty"`
-	Bulletins       []models.BulletinsPeriod  `json:"bulletins,omitempty"`
-	UserRangeHashes []models.HashedUsersRange `json:"user_range_hashes,omitempty"`
-	Users           []models.UsersRange       `json:"users,omitempty"`
+	Hashes          models.HashSet               `json:"hash"`
+	IsBusy          bool                         `json:"is_busy"`
+	MessageRanges   []hashrange.HashedPeriod     `json:"message_ranges,omitempty"`
+	Messages        []models.MessagesPeriod      `json:"messages,omitempty"`
+	BulletinRanges  []hashrange.HashedPeriod     `json:"bulletin_ranges,omitempty"`
+	Bulletins       []models.BulletinsPeriod     `json:"bulletins,omitempty"`
+	UserRangeHashes []hashrange.HashedUsersRange `json:"user_range_hashes,omitempty"`
+	Users           []models.UsersRange          `json:"users,omitempty"`
 }
 
 func handleSync(w http.ResponseWriter, r *http.Request) {
@@ -79,9 +80,9 @@ func handleSyncRequest(w http.ResponseWriter, r *http.Request) {
 func ComputeSyncResponse(db *gorm.DB, req SyncRequest) (SyncResponse, error) {
 
 	// Messages
-	messagePeriods := []models.Period{}
+	messagePeriods := []hashrange.Period{}
 	for _, period := range req.MessageRanges {
-		messagePeriods = append(messagePeriods, models.Period{
+		messagePeriods = append(messagePeriods, hashrange.Period{
 			Start: period.Start,
 			End:   period.End,
 		})
@@ -95,13 +96,13 @@ func ComputeSyncResponse(db *gorm.DB, req SyncRequest) (SyncResponse, error) {
 	}
 	fmt.Printf("Generated %d message hash ranges\n", len(ourMessagesHashRanges))
 
-	missmatchingMessagesRanges := []models.HashedPeriod{}
+	missmatchingMessagesRanges := []hashrange.HashedPeriod{}
 	for _, ourRange := range ourMessagesHashRanges {
-		ourStart := models.RealizeStart(ourRange.Start)
-		ourEnd := models.RealizeEnd(ourRange.End)
+		ourStart := hashrange.RealizeStart(ourRange.Start)
+		ourEnd := hashrange.RealizeEnd(ourRange.End)
 		for _, theirRange := range req.MessageRanges {
-			theirStart := models.RealizeStart(theirRange.Start)
-			theirEnd := models.RealizeEnd(theirRange.End)
+			theirStart := hashrange.RealizeStart(theirRange.Start)
+			theirEnd := hashrange.RealizeEnd(theirRange.End)
 			if ourStart.Equal(theirStart) && ourEnd.Equal(theirEnd) {
 				if ourRange.Hash != theirRange.Hash {
 					fmt.Printf("Found mismatching hash for range %v to %v (our hash: %s, their hash: %s)\n",
@@ -123,7 +124,7 @@ func ComputeSyncResponse(db *gorm.DB, req SyncRequest) (SyncResponse, error) {
 
 	counts := map[int]int64{}
 	for index, mismatchingRange := range missmatchingMessagesRanges {
-		period := models.Period{
+		period := hashrange.Period{
 			Start: mismatchingRange.Start,
 			End:   mismatchingRange.End,
 		}
@@ -170,14 +171,14 @@ func ComputeSyncResponse(db *gorm.DB, req SyncRequest) (SyncResponse, error) {
 			// in the next step instead of further hashed range juggling.
 			splits := int(counts[index]/(maxBatchSize*10)) + 1
 			fmt.Printf("Splitting range into %d parts\n", splits)
-			periods := models.SplitTimeRange(mismatchingRange.Period, splits)
+			periods := hashrange.SplitTimeRange(mismatchingRange.Period, splits)
 			for _, period := range periods {
-				hashedMessagePeriods, err := models.GetMessagesHashRanges(db, []models.Period{period})
+				hashedMessagePeriods, err := models.GetMessagesHashRanges(db, []hashrange.Period{period})
 				if err != nil {
 					return SyncResponse{}, fmt.Errorf("failed to generate hash ranges for split: %v", err)
 				}
 				for _, hashedMessagesPeriod := range hashedMessagePeriods {
-					resp.MessageRanges = append(resp.MessageRanges, models.HashedPeriod{
+					resp.MessageRanges = append(resp.MessageRanges, hashrange.HashedPeriod{
 						Period: hashedMessagesPeriod.Period,
 						Hash:   hashedMessagesPeriod.Hash,
 					})
@@ -187,9 +188,9 @@ func ComputeSyncResponse(db *gorm.DB, req SyncRequest) (SyncResponse, error) {
 	}
 
 	// Bulletins (similar logic can be added here)
-	bulletinPeriods := []models.Period{}
+	bulletinPeriods := []hashrange.Period{}
 	for _, period := range req.BulletinRanges {
-		bulletinPeriods = append(bulletinPeriods, models.Period{
+		bulletinPeriods = append(bulletinPeriods, hashrange.Period{
 			Start: period.Start,
 			End:   period.End,
 		})
@@ -202,13 +203,13 @@ func ComputeSyncResponse(db *gorm.DB, req SyncRequest) (SyncResponse, error) {
 	}
 	fmt.Printf("Generated %d bulletin hash ranges\n", len(ourBulletinHashRanges))
 
-	mismatchingBulletinRanges := []models.HashedPeriod{}
+	mismatchingBulletinRanges := []hashrange.HashedPeriod{}
 	for _, ourRange := range ourBulletinHashRanges {
-		ourStart := models.RealizeStart(ourRange.Start)
-		ourEnd := models.RealizeEnd(ourRange.End)
+		ourStart := hashrange.RealizeStart(ourRange.Start)
+		ourEnd := hashrange.RealizeEnd(ourRange.End)
 		for _, theirRange := range req.BulletinRanges {
-			theirStart := models.RealizeStart(theirRange.Start)
-			theirEnd := models.RealizeEnd(theirRange.End)
+			theirStart := hashrange.RealizeStart(theirRange.Start)
+			theirEnd := hashrange.RealizeEnd(theirRange.End)
 			if ourStart == theirStart && ourEnd == theirEnd {
 				if ourRange.Hash != theirRange.Hash {
 					fmt.Printf("Found mismatching hash for bulletin range %v to %v (our hash: %s, their hash: %s)\n",
@@ -221,7 +222,7 @@ func ComputeSyncResponse(db *gorm.DB, req SyncRequest) (SyncResponse, error) {
 	fmt.Printf("Found %d mismatching bulletin hash ranges\n", len(mismatchingBulletinRanges))
 
 	for _, mismatchingRange := range mismatchingBulletinRanges {
-		period := models.Period{
+		period := hashrange.Period{
 			Start: mismatchingRange.Start,
 			End:   mismatchingRange.End,
 		}
@@ -238,9 +239,9 @@ func ComputeSyncResponse(db *gorm.DB, req SyncRequest) (SyncResponse, error) {
 	}
 
 	// Users
-	userRanges := []models.StringRange{}
+	userRanges := []hashrange.StringRange{}
 	for _, ur := range req.Users {
-		userRanges = append(userRanges, models.StringRange{
+		userRanges = append(userRanges, hashrange.StringRange{
 			Start: ur.Start,
 			End:   ur.End,
 		})
@@ -253,7 +254,7 @@ func ComputeSyncResponse(db *gorm.DB, req SyncRequest) (SyncResponse, error) {
 	}
 	fmt.Printf("Generated %d user range hashes\n", len(ourUserRangeHashes))
 
-	mismatchingUserRanges := []models.HashedUsersRange{}
+	mismatchingUserRanges := []hashrange.HashedUsersRange{}
 	for _, ourRange := range ourUserRangeHashes {
 		ourStart := ourRange.Start
 		ourEnd := ourRange.End
