@@ -92,20 +92,45 @@ func StartSync(node remote.API, hash string) error {
 		return err
 	}
 
-	SyncUsers(node, users)
+	pushDeltas(node, users, messages, bulletins)
+	return nil
+}
 
-	// Sort messages by creation time
+// pushDeltas POSTs items the local Node has that the remote Node lacks,
+// one HTTP call per resource type. Errors are logged but not propagated —
+// sync rounds are eventually-consistent; a transient push failure recovers
+// on the next round. Messages and bulletins are sorted by CreatedAt before
+// the push so the remote ingests in deterministic order.
+func pushDeltas(node remote.API, users []models.User, messages []models.Message, bulletins []models.Bulletin) {
+	if len(users) > 0 {
+		ep := node.SyncUsers()
+		_, resp, err := ep.Post(users)
+		logPush(node, "users", len(users), resp, err)
+	}
+
 	SortMessages(messages)
-
-	// Send messages unique to this node to the remote node
-	SyncMessages(node, messages)
+	if len(messages) > 0 {
+		ep := node.SyncMessages()
+		_, resp, err := ep.Post(messages)
+		logPush(node, "messages", len(messages), resp, err)
+	}
 
 	SortBulletins(bulletins)
+	if len(bulletins) > 0 {
+		ep := node.SyncBulletins()
+		_, resp, err := ep.Post(bulletins)
+		logPush(node, "bulletins", len(bulletins), resp, err)
+	}
+}
 
-	// Send bulletins unique to this node to the remote node
-	SyncBulletins(node, bulletins)
-
-	return nil
+func logPush(node remote.API, kind string, count int, resp *http.Response, err error) {
+	if err != nil {
+		fmt.Printf("Failed to push %d %s to %s: %v\n", count, kind, node.Address, err)
+		return
+	}
+	if resp != nil {
+		fmt.Printf("Pushed %d %s to %s: %s\n", count, kind, node.Address, resp.Status)
+	}
 }
 
 func SortMessages(messages []models.Message) {
@@ -169,29 +194,20 @@ func SyncWithRequester(requester SyncRequester, node remote.API, hashedMessagesP
 	messagesMissingInRemote := []models.Message{}
 
 	for _, messagesPeriod := range syncResponse.Messages {
-		ourMessages, err := models.GetMessagesByPeriod(models.DB, messagesPeriod.Period)
+		period := messagesPeriod.Period
+		missing, err := reconcile[models.Message](
+			func() ([]models.Message, error) {
+				return models.GetMessagesByPeriod(models.DB, period)
+			},
+			messagesPeriod.Messages,
+			func(a, b models.Message) bool { return a.ID == b.ID },
+			func(m models.Message) error { return models.DB.Create(&m).Error },
+			isDuplicateKeyErr,
+		)
 		if err != nil {
-			return []models.Message{}, []models.Bulletin{}, []models.User{}, fmt.Errorf("failed to get messages by period: %v", err)
+			return []models.Message{}, []models.Bulletin{}, []models.User{}, fmt.Errorf("reconcile messages: %v", err)
 		}
-
-		for _, message := range messagesPeriod.Messages {
-			if !message.In(ourMessages) {
-				fmt.Printf("Inserting message into our database: %+v\n", message)
-				// Insert message into our database
-				if err := models.DB.Create(&message).Error; err != nil {
-					// Ignore duplicate key errors since those messages were already synced
-					if !strings.Contains(err.Error(), "duplicate key") {
-						return []models.Message{}, []models.Bulletin{}, []models.User{}, err
-					}
-				}
-			}
-		}
-
-		for _, message := range ourMessages {
-			if !message.In(messagesPeriod.Messages) {
-				messagesMissingInRemote = append(messagesMissingInRemote, message)
-			}
-		}
+		messagesMissingInRemote = append(messagesMissingInRemote, missing...)
 	}
 
 	periodsForRemoteMessagesHashes := []models.Period{}
@@ -210,29 +226,20 @@ func SyncWithRequester(requester SyncRequester, node remote.API, hashedMessagesP
 	bulletinsMissingInRemote := []models.Bulletin{}
 
 	for _, bulletinPeriod := range syncResponse.Bulletins {
-		ourBulletins, err := models.GetBulletinsByPeriod(models.DB, bulletinPeriod.Period)
+		period := bulletinPeriod.Period
+		missing, err := reconcile[models.Bulletin](
+			func() ([]models.Bulletin, error) {
+				return models.GetBulletinsByPeriod(models.DB, period)
+			},
+			bulletinPeriod.Bulletins,
+			func(a, b models.Bulletin) bool { return a.ID == b.ID },
+			func(b models.Bulletin) error { return models.DB.Create(&b).Error },
+			isDuplicateKeyErr,
+		)
 		if err != nil {
-			return []models.Message{}, []models.Bulletin{}, []models.User{}, fmt.Errorf("failed to get bulletins by period: %v", err)
+			return []models.Message{}, []models.Bulletin{}, []models.User{}, fmt.Errorf("reconcile bulletins: %v", err)
 		}
-
-		for _, bulletin := range bulletinPeriod.Bulletins {
-			if !bulletin.In(ourBulletins) {
-				fmt.Printf("Inserting bulletin into our database: %+v\n", bulletin)
-				// Insert bulletin into our database
-				if err := models.DB.Create(&bulletin).Error; err != nil {
-					// Ignore duplicate key errors since those bulletins were already synced
-					if !strings.Contains(err.Error(), "duplicate key") {
-						return []models.Message{}, []models.Bulletin{}, []models.User{}, err
-					}
-				}
-			}
-		}
-
-		for _, bulletin := range ourBulletins {
-			if !bulletin.In(bulletinPeriod.Bulletins) {
-				bulletinsMissingInRemote = append(bulletinsMissingInRemote, bulletin)
-			}
-		}
+		bulletinsMissingInRemote = append(bulletinsMissingInRemote, missing...)
 	}
 
 	periodsForRemoteBulletinHashes := []models.Period{}
@@ -247,48 +254,29 @@ func SyncWithRequester(requester SyncRequester, node remote.API, hashedMessagesP
 
 	hashedBulletinPeriodsToCheck := mismatchedMessagesPeriods(ourBulletinHashes, syncResponse.BulletinRanges)
 
-	// Users
+	// Users — equality is ID-or-fingerprint-group; sameUserGroup is needed
+	// because the integration tests synthesise fingerprints like
+	// "FP_A2_<random>" and expect peers to recognise the shared identity.
 	usersMissingInRemote := []models.User{}
+	userEqual := func(a, b models.User) bool {
+		return a.ID == b.ID || sameUserGroup(a.Fingerprint, b.Fingerprint)
+	}
 
-	// Ingest users returned by the remote for mismatching ranges
 	for _, usersRange := range syncResponse.Users {
-		ourUsers, err := models.GetUsersByFingerprintRange(models.DB, usersRange.StringRange.Start, usersRange.StringRange.End)
+		ur := usersRange
+		missing, err := reconcile[models.User](
+			func() ([]models.User, error) {
+				return models.GetUsersByFingerprintRange(models.DB, ur.StringRange.Start, ur.StringRange.End)
+			},
+			ur.Users,
+			userEqual,
+			func(u models.User) error { return models.DB.Create(&u).Error },
+			isDuplicateKeyErr,
+		)
 		if err != nil {
-			return []models.Message{}, []models.Bulletin{}, []models.User{}, fmt.Errorf("failed to get users by fingerprint range: %v", err)
+			return []models.Message{}, []models.Bulletin{}, []models.User{}, fmt.Errorf("reconcile users: %v", err)
 		}
-
-		// Insert any users present on remote but missing locally
-		for _, user := range usersRange.Users {
-			found := false
-			for _, ou := range ourUsers {
-				if user.ID == ou.ID || sameUserGroup(user.Fingerprint, ou.Fingerprint) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				fmt.Printf("Inserting user into our database: %+v\n", user)
-				if err := models.DB.Create(&user).Error; err != nil {
-					if !strings.Contains(err.Error(), "duplicate key") {
-						return []models.Message{}, []models.Bulletin{}, []models.User{}, err
-					}
-				}
-			}
-		}
-
-		// Track any local users missing on remote so we can push them
-		for _, ou := range ourUsers {
-			found := false
-			for _, user := range usersRange.Users {
-				if ou.ID == user.ID || sameUserGroup(ou.Fingerprint, user.Fingerprint) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				usersMissingInRemote = append(usersMissingInRemote, ou)
-			}
-		}
+		usersMissingInRemote = append(usersMissingInRemote, missing...)
 	}
 
 	userRangesToCheck := []models.HashedUsersRange{}
