@@ -48,9 +48,10 @@ func main() {
 		panic(err)
 	}
 
+	syncHandler := discovery.NewSyncOnMismatchHandler()
 	for _, conn := range connections {
 		defer conn.Conn.Close()
-		go discovery.StartMulticastListener(cfg, &conn)
+		go discovery.StartMulticastListener(cfg, &conn, syncHandler)
 		go discovery.StartBroadcast(cfg, &conn)
 	}
 

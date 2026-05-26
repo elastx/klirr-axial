@@ -11,8 +11,6 @@ import (
 
 	"axial/config"
 	"axial/models"
-	"axial/remote"
-	"axial/synchronization"
 )
 
 // New type to hold our connections
@@ -241,7 +239,12 @@ func setupMulticastConn(cfg config.Config, iface *net.Interface, addr *net.UDPAd
 	return conn, nil
 }
 
-func StartMulticastListener(cfg config.Config, conn *MulticastConnection) {
+// StartMulticastListener reads UDP datagrams and forwards every well-formed
+// Announcement to handler.Handle on a fresh goroutine. The socket layer
+// stays here; the decision-to-sync logic lives behind the Handler seam.
+// Running the handler in its own goroutine means a slow sync round can no
+// longer block the read loop.
+func StartMulticastListener(cfg config.Config, conn *MulticastConnection, handler Handler) {
 	fmt.Printf("Listening for messages on %v\n", conn.Conn.LocalAddr())
 	buffer := make([]byte, 4096)
 
@@ -254,7 +257,7 @@ func StartMulticastListener(cfg config.Config, conn *MulticastConnection) {
 
 		message := string(buffer[:n])
 
-		// Check for both our configured port and the Mac's port (60090)
+		// Diagnostic logging for packets arriving on an unexpected source port.
 		if !strings.Contains(src.String(), fmt.Sprintf(":%d", cfg.MulticastPort)) {
 			if strings.Contains(src.String(), ":60090") {
 				fmt.Printf("Got message on port 60090 from %s: %q\n", src, message)
@@ -263,43 +266,14 @@ func StartMulticastListener(cfg config.Config, conn *MulticastConnection) {
 			}
 		}
 
-		// Only process messages that look like ours (4 pipe-separated fields)
-		if parts := strings.Split(message, "|"); len(parts) == 4 {
-			fmt.Printf("RECV: %s (from %s)\n", message, src)
-			// axial.local|74d63e48f0e18e7c300904b49457a630ec782c244fb212273742ce1499cd21ef|:8080|0.0.0.0 (from 192.168.1.207:45678)
-			if !models.IsSyncing() {
-				hash := parts[1]
-				ourHashes := models.GetHashes()
-				if err != nil {
-					fmt.Printf("Failed to get database hash: %v\n", err)
-					continue
-				}
-				ourHash := ourHashes.Full
-
-				if hash != ourHash {
-					fmt.Printf("Mismatching hash from %s: %s != %s\n", src, hash, ourHash)
-					port := parts[2]
-					remoteNode := remote.API{
-						Address: fmt.Sprintf("%s%s", src.IP, port),
-					}
-					
-					err := synchronization.StartSync(remoteNode, hash)
-					if err != nil {
-						fmt.Printf("Failed to start sync: %v\n", err)
-					} else {
-						fmt.Printf("Synchronized with %s\n", remoteNode.Address)
-					}
-				} else {
-					fmt.Printf("Matching hash from %s\n", src)
-				}
-			} else {
-				fmt.Printf("Ignoring ping from %s because we're already syncing\n", src)
-			}
-
-		} else {
-			// Debug log for non-matching messages
+		ann, ok := ParseAnnouncement(message, src)
+		if !ok {
 			fmt.Printf("Ignored non-axial message from %s (len=%d)\n", src, len(message))
+			continue
 		}
+
+		fmt.Printf("RECV: %s (from %s)\n", message, src)
+		go handler.Handle(ann)
 	}
 }
 
