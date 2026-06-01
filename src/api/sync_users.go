@@ -1,9 +1,10 @@
 package api
 
 import (
-	"axial/models"
 	"encoding/json"
 	"net/http"
+
+	"axial/models"
 )
 
 type SyncUsersRequest struct {
@@ -22,26 +23,15 @@ func handleSyncUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate required fields
 	if len(req.Users) == 0 {
 		http.Error(w, "Users are required", http.StatusBadRequest)
 		return
 	}
 
-	// Create users
-	for _, user := range req.Users {
-		if err := models.DB.Create(&user).Error; err != nil {
-			// Ignore duplicate errors
-			if models.IsDuplicateError(err) {
-				continue
-			}
-			http.Error(w, "Failed to create user", http.StatusInternalServerError)
-			return
-		}
+	if err := ingest(models.DB, req.Users); err != nil {
+		http.Error(w, "Failed to ingest users", http.StatusInternalServerError)
+		return
 	}
 
-	models.RefreshHashes(models.DB)
-
 	w.WriteHeader(http.StatusCreated)
-
 }

@@ -1,13 +1,14 @@
 package api
 
 import (
-	"axial/models"
 	"encoding/json"
 	"net/http"
+
+	"axial/models"
 )
 
 type SyncBulletinsRequest struct {
-	Bulletins []models.Bulletin `json:"messages"`
+	Bulletins []models.Bulletin `json:"bulletins"`
 }
 
 func handleSyncBulletins(w http.ResponseWriter, r *http.Request) {
@@ -22,26 +23,15 @@ func handleSyncBulletins(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate required fields
 	if len(req.Bulletins) == 0 {
 		http.Error(w, "Bulletins are required", http.StatusBadRequest)
 		return
 	}
 
-	// Create bulletins
-	for _, bulletin := range req.Bulletins {
-		if err := models.DB.Create(&bulletin).Error; err != nil {
-			// Ignore duplicate errors
-			if models.IsDuplicateError(err) {
-				continue
-			}
-			http.Error(w, "Failed to create bulletin", http.StatusInternalServerError)
-			return
-		}
+	if err := ingest(models.DB, req.Bulletins); err != nil {
+		http.Error(w, "Failed to ingest bulletins", http.StatusInternalServerError)
+		return
 	}
 
-	models.RefreshHashes(models.DB)
-
 	w.WriteHeader(http.StatusCreated)
-
 }

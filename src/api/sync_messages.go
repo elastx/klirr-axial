@@ -1,9 +1,10 @@
 package api
 
 import (
-	"axial/models"
 	"encoding/json"
 	"net/http"
+
+	"axial/models"
 )
 
 type SyncMessagesRequest struct {
@@ -22,26 +23,15 @@ func handleSyncMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate required fields
 	if len(req.Messages) == 0 {
 		http.Error(w, "Messages are required", http.StatusBadRequest)
 		return
 	}
 
-	// Create messages
-	for _, message := range req.Messages {
-		if err := models.DB.Create(&message).Error; err != nil {
-			// Ignore duplicate errors
-			if models.IsDuplicateError(err) {
-				continue
-			}
-			http.Error(w, "Failed to create message", http.StatusInternalServerError)
-			return
-		}
+	if err := ingest(models.DB, req.Messages); err != nil {
+		http.Error(w, "Failed to ingest messages", http.StatusInternalServerError)
+		return
 	}
 
-	models.RefreshHashes(models.DB)
-
 	w.WriteHeader(http.StatusCreated)
-
 }
