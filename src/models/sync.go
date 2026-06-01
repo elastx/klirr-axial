@@ -3,7 +3,8 @@ package models
 import (
 	"fmt"
 	"sync"
-	"time"
+
+	"axial/hashrange"
 
 	"gorm.io/gorm"
 )
@@ -19,61 +20,23 @@ var (
 	syncState = &SyncState{}
 )
 
-type Period struct {
-	Start *time.Time `json:"start,omitempty"`
-	End   *time.Time `json:"end,omitempty"`
-}
-
-func RealizeStart(start *time.Time) time.Time {
-	if start == nil {
-		// Start at 2025-01-01, the release year
-		return time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	}
-	return *start
-}
-
-func RealizeEnd(end *time.Time) time.Time {
-	if end == nil {
-		// End at the current time
-		return time.Now()
-	}
-	return *end
-}
-
-// HashedPeriod represents a time period and its hash
-type HashedPeriod struct {
-	Period
-	Hash string `json:"hash"`
-}
-
+// MessagesPeriod carries the Messages that live within a hash range. The
+// Period bounds are inlined into JSON via the embedded hashrange.Period.
 type MessagesPeriod struct {
-	Period
+	hashrange.Period
 	Messages []Message `json:"messages"`
 }
 
+// BulletinsPeriod carries the Bulletins that live within a hash range.
 type BulletinsPeriod struct {
-	Period
+	hashrange.Period
 	Bulletins []Bulletin `json:"bulletins"`
 }
 
-type StringRange struct {
-	Start string `json:"start"`
-	End   string `json:"end"`
-}
-
+// UsersRange carries the Users that live within a fingerprint hash range.
 type UsersRange struct {
-	StringRange
+	hashrange.StringRange
 	Users []User `json:"users"`
-}
-
-type HashedUsersRange struct {
-	StringRange
-	Hash string `json:"hash"`
-}
-
-type HashedFilesRange struct {
-	StringRange
-	Hash string `json:"hash"`
 }
 
 // StartSync attempts to start a sync operation
@@ -117,15 +80,17 @@ func GetHashes() HashSet {
 	return syncState.hashes
 }
 
-// GetMessagesHashRanges creates the standard set of time ranges to check
-func GetMessagesHashRanges(db *gorm.DB, periods []Period) ([]HashedPeriod, error) {
-	hashedPeriods := []HashedPeriod{}
+// GetMessagesHashRanges computes the message-content hash for each of the
+// supplied hash ranges. Pure-math splitting / comparison of ranges lives in
+// the hashrange package; this function is the DB-touching adapter.
+func GetMessagesHashRanges(db *gorm.DB, periods []hashrange.Period) ([]hashrange.HashedPeriod, error) {
+	hashedPeriods := []hashrange.HashedPeriod{}
 	for _, period := range periods {
 		hash, err := GetMessagesHash(db, period.Start, period.End)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get messages hash: %v", err)
 		}
-		hashedPeriods = append(hashedPeriods, HashedPeriod{
+		hashedPeriods = append(hashedPeriods, hashrange.HashedPeriod{
 			Period: period,
 			Hash:   hash,
 		})
@@ -133,15 +98,16 @@ func GetMessagesHashRanges(db *gorm.DB, periods []Period) ([]HashedPeriod, error
 	return hashedPeriods, nil
 }
 
-// GetBulletinsHashRanges creates hashed ranges for bulletins
-func GetBulletinsHashRanges(db *gorm.DB, periods []Period) ([]HashedPeriod, error) {
-	hashedPeriods := []HashedPeriod{}
+// GetBulletinsHashRanges computes the bulletin-content hash for each of the
+// supplied hash ranges.
+func GetBulletinsHashRanges(db *gorm.DB, periods []hashrange.Period) ([]hashrange.HashedPeriod, error) {
+	hashedPeriods := []hashrange.HashedPeriod{}
 	for _, period := range periods {
 		hash, err := GetBulletinsHash(db, period.Start, period.End)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get bulletins hash: %v", err)
 		}
-		hashedPeriods = append(hashedPeriods, HashedPeriod{
+		hashedPeriods = append(hashedPeriods, hashrange.HashedPeriod{
 			Period: period,
 			Hash:   hash,
 		})
@@ -149,14 +115,16 @@ func GetBulletinsHashRanges(db *gorm.DB, periods []Period) ([]HashedPeriod, erro
 	return hashedPeriods, nil
 }
 
-func GetUsersHashRanges(db *gorm.DB, stringRanges []StringRange) ([]HashedUsersRange, error) {
-	hashedRanges := []HashedUsersRange{}
+// GetUsersHashRanges computes the user-content hash for each of the supplied
+// fingerprint hash ranges.
+func GetUsersHashRanges(db *gorm.DB, stringRanges []hashrange.StringRange) ([]hashrange.HashedUsersRange, error) {
+	hashedRanges := []hashrange.HashedUsersRange{}
 	for _, stringRange := range stringRanges {
 		hash, err := GetUsersHashByFingerprintRange(db, stringRange.Start, stringRange.End)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get users hash: %v", err)
 		}
-		hashedRanges = append(hashedRanges, HashedUsersRange{
+		hashedRanges = append(hashedRanges, hashrange.HashedUsersRange{
 			StringRange: stringRange,
 			Hash:        hash,
 		})
@@ -165,50 +133,25 @@ func GetUsersHashRanges(db *gorm.DB, stringRanges []StringRange) ([]HashedUsersR
 	return hashedRanges, nil
 }
 
-// SplitTimeRange splits a time range into n equal parts
-func SplitTimeRange(period Period, n int) []Period {
-	start := RealizeStart(period.Start)
-	end := RealizeEnd(period.End)
-
-	duration := end.Sub(start)
-	partDuration := duration / time.Duration(n)
-
-	ranges := make([]Period, n)
-	for i := 0; i < n; i++ {
-		partStart := start.Add(partDuration * time.Duration(i))
-		partEnd := partStart.Add(partDuration)
-		if i == n-1 {
-			partEnd = end // Ensure we don't miss any time due to rounding
-		}
-
-		ranges[i] = Period{
-			Start: &partStart,
-			End:   &partEnd,
-		}
-	}
-
-	return ranges
-}
-
-func GetMessagesByPeriod(db *gorm.DB, period Period) ([]Message, error) {
+func GetMessagesByPeriod(db *gorm.DB, period hashrange.Period) ([]Message, error) {
 	var messages []Message
 	err := db.Where("created_at >= ? AND created_at < ?", period.Start, period.End).Find(&messages).Error
 	return messages, err
 }
 
-func CountMessagesByPeriod(db *gorm.DB, period Period) int64 {
+func CountMessagesByPeriod(db *gorm.DB, period hashrange.Period) int64 {
 	var count int64
 	db.Model(&Message{}).Where("created_at >= ? AND created_at < ?", period.Start, period.End).Count(&count)
 	return count
 }
 
-func GetBulletinsByPeriod(db *gorm.DB, period Period) ([]Bulletin, error) {
+func GetBulletinsByPeriod(db *gorm.DB, period hashrange.Period) ([]Bulletin, error) {
 	var bulletins []Bulletin
 	err := db.Where("created_at >= ? AND created_at < ?", period.Start, period.End).Find(&bulletins).Error
 	return bulletins, err
 }
 
-func CountBulletinsByPeriod(db *gorm.DB, period Period) int64 {
+func CountBulletinsByPeriod(db *gorm.DB, period hashrange.Period) int64 {
 	var count int64
 	db.Model(&Bulletin{}).Where("created_at >= ? AND created_at < ?", period.Start, period.End).Count(&count)
 	return count

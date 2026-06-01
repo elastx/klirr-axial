@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"axial/api"
+	"axial/hashrange"
 	"axial/models"
 	"axial/remote"
 )
@@ -68,7 +68,8 @@ func StartSync(node remote.API, hash string) error {
 	}
 	defer models.EndSync()
 
-	periods, stringRanges := startingSyncRanges()
+	periods := hashrange.InitialPeriods()
+	stringRanges := hashrange.InitialFingerprintRanges()
 	hashedMessagesPeriods, err := models.GetMessagesHashRanges(models.DB, periods)
 	if err != nil {
 		return err
@@ -133,13 +134,13 @@ func SortBulletins(bulletins []models.Bulletin) {
 //
 // For unit tests, prefer calling SyncWithRequester with a custom requester that
 // uses in-memory handlers to return api.SyncResponse.
-func Sync(node remote.API, hashedMessagePeriods []models.HashedPeriod, hashedBulletinPeriods []models.HashedPeriod, hashedUsers []models.HashedUsersRange) ([]models.Message, []models.Bulletin, []models.User, error) {
+func Sync(node remote.API, hashedMessagePeriods []hashrange.HashedPeriod, hashedBulletinPeriods []hashrange.HashedPeriod, hashedUsers []hashrange.HashedUsersRange) ([]models.Message, []models.Bulletin, []models.User, error) {
 	return SyncWithRequester(httpSyncRequester{}, node, hashedMessagePeriods, hashedBulletinPeriods, hashedUsers)
 }
 
 // SyncWithRequester is identical to Sync but allows the caller to provide a
 // pluggable requester for testability.
-func SyncWithRequester(requester SyncRequester, node remote.API, hashedMessagesPeriods []models.HashedPeriod, hashedBulletinPeriods []models.HashedPeriod, hashedUsers []models.HashedUsersRange) ([]models.Message, []models.Bulletin, []models.User, error) {
+func SyncWithRequester(requester SyncRequester, node remote.API, hashedMessagesPeriods []hashrange.HashedPeriod, hashedBulletinPeriods []hashrange.HashedPeriod, hashedUsers []hashrange.HashedUsersRange) ([]models.Message, []models.Bulletin, []models.User, error) {
 	if len(hashedMessagesPeriods) == 0 {
 		fmt.Printf("No periods to sync with %s\n", node.Address)
 		return []models.Message{}, []models.Bulletin{}, []models.User{}, nil
@@ -194,7 +195,7 @@ func SyncWithRequester(requester SyncRequester, node remote.API, hashedMessagesP
 		}
 	}
 
-	periodsForRemoteMessagesHashes := []models.Period{}
+	periodsForRemoteMessagesHashes := []hashrange.Period{}
 	for _, hashedPeriod := range syncResponse.MessageRanges {
 		periodsForRemoteMessagesHashes = append(periodsForRemoteMessagesHashes, hashedPeriod.Period)
 	}
@@ -204,7 +205,7 @@ func SyncWithRequester(requester SyncRequester, node remote.API, hashedMessagesP
 		return []models.Message{}, []models.Bulletin{}, []models.User{}, fmt.Errorf("failed to generate hash ranges: %v", err)
 	}
 
-	hashedMessagesPeriodsToCheck := mismatchedMessagesPeriods(ourMessagesHashes, syncResponse.MessageRanges)
+	hashedMessagesPeriodsToCheck := hashrange.MismatchedPeriods(ourMessagesHashes, syncResponse.MessageRanges)
 
 	// Bulletins
 	bulletinsMissingInRemote := []models.Bulletin{}
@@ -235,7 +236,7 @@ func SyncWithRequester(requester SyncRequester, node remote.API, hashedMessagesP
 		}
 	}
 
-	periodsForRemoteBulletinHashes := []models.Period{}
+	periodsForRemoteBulletinHashes := []hashrange.Period{}
 	for _, hashedPeriod := range syncResponse.BulletinRanges {
 		periodsForRemoteBulletinHashes = append(periodsForRemoteBulletinHashes, hashedPeriod.Period)
 	}
@@ -245,7 +246,7 @@ func SyncWithRequester(requester SyncRequester, node remote.API, hashedMessagesP
 		return []models.Message{}, []models.Bulletin{}, []models.User{}, fmt.Errorf("failed to generate bulletin hash ranges: %v", err)
 	}
 
-	hashedBulletinPeriodsToCheck := mismatchedMessagesPeriods(ourBulletinHashes, syncResponse.BulletinRanges)
+	hashedBulletinPeriodsToCheck := hashrange.MismatchedPeriods(ourBulletinHashes, syncResponse.BulletinRanges)
 
 	// Users
 	usersMissingInRemote := []models.User{}
@@ -291,7 +292,7 @@ func SyncWithRequester(requester SyncRequester, node remote.API, hashedMessagesP
 		}
 	}
 
-	userRangesToCheck := []models.HashedUsersRange{}
+	userRangesToCheck := []hashrange.HashedUsersRange{}
 
 	for _, hashedUserRange := range syncResponse.UserRangeHashes {
 		ourUserHash, err := models.GetUsersHashByFingerprintRange(models.DB, hashedUserRange.Start, hashedUserRange.End)
@@ -341,97 +342,3 @@ func userGroupPrefix(s string) string {
 	return s[:first+1+second]
 }
 
-// mismatchedMessagesPeriods returns the set of hashed periods from the remote that
-// correspond to the same concrete time ranges as ours but have different
-// content hashes.
-func mismatchedMessagesPeriods(our []models.HashedPeriod, theirs []models.HashedPeriod) []models.HashedPeriod {
-	out := []models.HashedPeriod{}
-	for _, ourHash := range our {
-		start := models.RealizeStart(ourHash.Start)
-		end := models.RealizeEnd(ourHash.End)
-		for _, theirHash := range theirs {
-			theirStart := models.RealizeStart(theirHash.Start)
-			theirEnd := models.RealizeEnd(theirHash.End)
-			if theirStart == start && theirEnd == end && theirHash.Hash != ourHash.Hash {
-				out = append(out, theirHash)
-			}
-		}
-	}
-	return out
-}
-
-func startingSyncRanges() ([]models.Period, []models.StringRange) {
-
-	earliestStartTime := models.RealizeStart(nil)
-	latestEndTime := models.RealizeEnd(nil)
-
-	periodSteps := []struct {
-		Years  int `json:"years"`
-		Months int `json:"months"`
-		Days   int `json:"days"`
-	}{
-		{0, -1, 0},
-		{0, -6, 0},
-		{-2, 0, 0},
-	}
-	var previousStart *time.Time
-	weekStart := getWeekStart()
-	if weekStart.Before(earliestStartTime) {
-		previousStart = &earliestStartTime
-	} else {
-		previousStart = &weekStart
-	}
-
-	periods := []models.Period{
-		{
-			Start: previousStart,
-			End:   &latestEndTime,
-		},
-	}
-
-	for _, step := range periodSteps {
-		start := previousStart.AddDate(step.Years, step.Months, step.Days)
-		if start.Before(earliestStartTime) {
-			periods = append(periods, models.Period{
-				Start: &earliestStartTime,
-				End:   previousStart,
-			})
-			break
-		}
-		periods = append(periods, models.Period{
-			Start: &start,
-			End:   previousStart,
-		})
-		previousStart = &start
-	}
-
-	periods = append(periods, models.Period{
-		Start: &earliestStartTime,
-		End:   previousStart,
-	})
-
-	// Generate user fingerprint ranges, an array of 0-9 and a-z
-	var userRanges []models.StringRange
-	for i := 0; i < 10; i++ {
-		userRanges = append(userRanges, models.StringRange{
-			Start: fmt.Sprintf("%c", '0'+i),
-			End:   fmt.Sprintf("%c", '0'+i+1),
-		})
-	}
-	for i := 0; i < 25; i++ {
-		userRanges = append(userRanges, models.StringRange{
-			Start: fmt.Sprintf("%c", 'a'+i),
-			End:   fmt.Sprintf("%c", 'a'+i+1),
-		})
-	}
-	return periods, userRanges
-}
-
-func getWeekStart() time.Time {
-	now := time.Now()
-	weekday := now.Weekday()
-	if weekday == time.Sunday {
-		weekday = 7
-	}
-	return now.AddDate(0, 0, -int(weekday-time.Monday)).Truncate(24 * time.Hour)
-}
