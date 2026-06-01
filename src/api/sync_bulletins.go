@@ -1,16 +1,17 @@
 package api
 
 import (
-	"axial/models"
 	"encoding/json"
 	"net/http"
+
+	"axial/models"
 )
 
 type SyncBulletinsRequest struct {
 	Bulletins []models.Bulletin `json:"messages"`
 }
 
-func handleSyncBulletins(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSyncBulletins(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -22,16 +23,13 @@ func handleSyncBulletins(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate required fields
 	if len(req.Bulletins) == 0 {
 		http.Error(w, "Bulletins are required", http.StatusBadRequest)
 		return
 	}
 
-	// Create bulletins
 	for _, bulletin := range req.Bulletins {
-		if err := models.DB.Create(&bulletin).Error; err != nil {
-			// Ignore duplicate errors
+		if err := s.DB.Create(&bulletin).Error; err != nil {
 			if models.IsDuplicateError(err) {
 				continue
 			}
@@ -40,8 +38,7 @@ func handleSyncBulletins(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	models.RefreshHashes(models.DB)
+	models.RefreshHashes(s.DB)
 
 	w.WriteHeader(http.StatusCreated)
-
 }

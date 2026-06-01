@@ -2,21 +2,20 @@ package api
 
 import (
 	"encoding/json"
-	"net/http"
 	"log"
+	"net/http"
 
 	"axial/models"
 )
 
-
-func handleGetMessages(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGetMessages(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var messages []models.Message
-	if err := models.DB.Find(&messages).Error; err != nil {
+	if err := s.DB.Find(&messages).Error; err != nil {
 		http.Error(w, "Failed to fetch messages", http.StatusInternalServerError)
 		return
 	}
@@ -25,7 +24,7 @@ func handleGetMessages(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(messages)
 }
 
-func handleCreateMessage(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleCreateMessage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -41,14 +40,13 @@ func handleCreateMessage(w http.ResponseWriter, r *http.Request) {
 		CreateMessage: req,
 	}
 
-	if err := models.DB.Create(&message).Error; err != nil {
-		// Validation/analysis errors should be returned to the client
+	if err := s.DB.Create(&message).Error; err != nil {
 		log.Printf("Create message failed: %v", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	models.RefreshHashes(models.DB)
+	models.RefreshHashes(s.DB)
 
 	w.WriteHeader(http.StatusCreated)
 }

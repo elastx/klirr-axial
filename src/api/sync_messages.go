@@ -1,16 +1,17 @@
 package api
 
 import (
-	"axial/models"
 	"encoding/json"
 	"net/http"
+
+	"axial/models"
 )
 
 type SyncMessagesRequest struct {
 	Messages []models.Message `json:"messages"`
 }
 
-func handleSyncMessages(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSyncMessages(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -22,16 +23,13 @@ func handleSyncMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate required fields
 	if len(req.Messages) == 0 {
 		http.Error(w, "Messages are required", http.StatusBadRequest)
 		return
 	}
 
-	// Create messages
 	for _, message := range req.Messages {
-		if err := models.DB.Create(&message).Error; err != nil {
-			// Ignore duplicate errors
+		if err := s.DB.Create(&message).Error; err != nil {
 			if models.IsDuplicateError(err) {
 				continue
 			}
@@ -40,8 +38,7 @@ func handleSyncMessages(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	models.RefreshHashes(models.DB)
+	models.RefreshHashes(s.DB)
 
 	w.WriteHeader(http.StatusCreated)
-
 }

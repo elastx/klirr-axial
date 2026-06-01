@@ -13,44 +13,40 @@ import (
 	"axial/config"
 )
 
-var DB *gorm.DB
-
 const (
 	UniqueViolationErr = "23505"
 )
 
-// InitDB establishes a connection to the database and performs migrations
-func InitDB(cfg config.DatabaseConfig) error {
+// InitDB connects to PostgreSQL, runs migrations, and returns the resulting
+// *gorm.DB. The caller is responsible for holding the handle and passing it
+// to the modules that need it — there is no package-level global.
+func InitDB(cfg config.DatabaseConfig) (*gorm.DB, error) {
 	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Name)
 
-	// Enable detailed logging for migrations
 	gormConfig := &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info),
 	}
 
-	var err error
-	DB, err = gorm.Open(postgres.Open(dsn), gormConfig)
+	db, err := gorm.Open(postgres.Open(dsn), gormConfig)
 	if err != nil {
-		return fmt.Errorf("failed to connect to database: %v", err)
+		return nil, fmt.Errorf("failed to connect to database: %v", err)
 	}
 
 	log.Println("Running migrations...")
-	// Run migrations
-	if err := DB.AutoMigrate(&User{}, &Message{}, &Bulletin{}); err != nil {
-		return fmt.Errorf("failed to run migrations: %v", err)
+	if err := db.AutoMigrate(&User{}, &Message{}, &Bulletin{}); err != nil {
+		return nil, fmt.Errorf("failed to run migrations: %v", err)
 	}
 
-	// Debug: Print table schema
 	var tableInfo []struct {
 		ColumnName string `gorm:"column:column_name"`
 		DataType   string `gorm:"column:data_type"`
 		IsNullable string `gorm:"column:is_nullable"`
 	}
 
-	if err := DB.Raw(`
-		SELECT column_name, data_type, is_nullable 
-		FROM information_schema.columns 
+	if err := db.Raw(`
+		SELECT column_name, data_type, is_nullable
+		FROM information_schema.columns
 		WHERE table_name = 'bulletin_board'
 		ORDER BY ordinal_position
 	`).Scan(&tableInfo).Error; err != nil {
@@ -62,15 +58,7 @@ func InitDB(cfg config.DatabaseConfig) error {
 		}
 	}
 
-	return nil
-}
-
-func GetUserByFingerprint(fingerprint Fingerprint) (*User, error) {
-	var user User
-	if err := DB.Where("fingerprint = ?", fingerprint).First(&user).Error; err != nil {
-		return nil, err
-	}
-	return &user, nil
+	return db, nil
 }
 
 func IsDuplicateError(err error) bool {

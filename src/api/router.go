@@ -5,7 +5,20 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"gorm.io/gorm"
 )
+
+// Server holds the per-process state the HTTP handlers need — currently
+// just the *gorm.DB. Creating one binds the routes to a specific DB, so
+// tests can spin up an in-memory SQLite and exercise handlers directly.
+type Server struct {
+	DB *gorm.DB
+}
+
+func NewServer(db *gorm.DB) *Server {
+	return &Server{DB: db}
+}
 
 type spaFileSystem struct {
 	root    http.FileSystem
@@ -15,39 +28,35 @@ type spaFileSystem struct {
 func (fs *spaFileSystem) Open(name string) (http.File, error) {
 	log.Printf("Attempting to serve: %s", name)
 
-	// Don't interfere with API routes
 	if strings.HasPrefix(name, "/v1/") {
 		return nil, os.ErrNotExist
 	}
 
 	f, err := fs.root.Open(name)
 	if os.IsNotExist(err) {
-		// Serve index.html for any path that doesn't exist
 		return fs.root.Open("index.html")
 	}
 	return f, err
 }
 
-func RegisterRoutes() {
-	// Log current working directory
+func (s *Server) RegisterRoutes() {
 	cwd, _ := os.Getwd()
 	log.Printf("Current working directory: %s", cwd)
 
-	// Serve frontend files with SPA support
 	fs := &spaFileSystem{root: http.Dir("frontend/dist"), indexes: true}
 	http.Handle("/", http.FileServer(fs))
 
-	http.HandleFunc("/v1/ping", handlePing)
-	http.HandleFunc("/v1/sync", handleSync)
-	http.HandleFunc("/v1/sync/messages", handleSyncMessages)
-	http.HandleFunc("/v1/sync/bulletins", handleSyncBulletins)
-	http.HandleFunc("/v1/sync/users", handleSyncUsers)
+	http.HandleFunc("/v1/ping", s.handlePing)
+	http.HandleFunc("/v1/sync", s.handleSync)
+	http.HandleFunc("/v1/sync/messages", s.handleSyncMessages)
+	http.HandleFunc("/v1/sync/bulletins", s.handleSyncBulletins)
+	http.HandleFunc("/v1/sync/users", s.handleSyncUsers)
 
 	// User routes
 	http.HandleFunc("/v1/users/search", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Users search endpoint: %s %s", r.Method, r.URL.Path)
 		if r.Method == http.MethodGet {
-			handleSearchUsers(w, r)
+			s.handleSearchUsers(w, r)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -56,7 +65,7 @@ func RegisterRoutes() {
 	http.HandleFunc("/v1/users/recent", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Users recent endpoint: %s %s", r.Method, r.URL.Path)
 		if r.Method == http.MethodGet {
-			handleRecentUsers(w, r)
+			s.handleRecentUsers(w, r)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -65,7 +74,7 @@ func RegisterRoutes() {
 	http.HandleFunc("/v1/users/{fingerprint}", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("User endpoint: %s %s", r.Method, r.URL.Path)
 		if r.Method == http.MethodGet {
-			handleGetUser(w, r)
+			s.handleGetUser(w, r)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -75,9 +84,9 @@ func RegisterRoutes() {
 		log.Printf("Users endpoint: %s %s", r.Method, r.URL.Path)
 		switch r.Method {
 		case http.MethodGet:
-			handleGetUsers(w, r)
+			s.handleGetUsers(w, r)
 		case http.MethodPost:
-			handleRegisterUser(w, r)
+			s.handleRegisterUser(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -88,9 +97,9 @@ func RegisterRoutes() {
 		log.Printf("Messages endpoint: %s %s", r.Method, r.URL.Path)
 		switch r.Method {
 		case http.MethodGet:
-			handleGetMessages(w, r)
+			s.handleGetMessages(w, r)
 		case http.MethodPost:
-			handleCreateMessage(w, r)
+			s.handleCreateMessage(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -101,9 +110,9 @@ func RegisterRoutes() {
 		log.Printf("Bulletin endpoint: %s %s", r.Method, r.URL.Path)
 		switch r.Method {
 		case http.MethodGet:
-			handleGetBulletin(w, r)
+			s.handleGetBulletin(w, r)
 		case http.MethodPost:
-			handleCreateBulletin(w, r)
+			s.handleCreateBulletin(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}

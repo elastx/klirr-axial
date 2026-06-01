@@ -15,14 +15,14 @@ type UserRegistration struct {
 	PublicKey   string `json:"public_key"`
 }
 
-func handleGetUsers(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGetUsers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var users []models.User
-	if err := models.DB.Find(&users).Error; err != nil {
+	if err := s.DB.Find(&users).Error; err != nil {
 		http.Error(w, "Failed to fetch users", http.StatusInternalServerError)
 		return
 	}
@@ -31,7 +31,7 @@ func handleGetUsers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(users)
 }
 
-func handleGetUser(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGetUser(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -44,7 +44,7 @@ func handleGetUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var user models.User
-	if err := models.DB.Where("fingerprint = ?", fingerprint).First(&user).Error; err != nil {
+	if err := s.DB.Where("fingerprint = ?", fingerprint).First(&user).Error; err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
@@ -53,7 +53,7 @@ func handleGetUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(user)
 }
 
-func handleRegisterUser(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleRegisterUser(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -71,18 +71,18 @@ func handleRegisterUser(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	if err := models.DB.Create(&user).Error; err != nil {
+	if err := s.DB.Create(&user).Error; err != nil {
 		http.Error(w, "Failed to register user", http.StatusInternalServerError)
 		return
 	}
 
-	models.RefreshHashes(models.DB)
+	models.RefreshHashes(s.DB)
 
 	w.WriteHeader(http.StatusCreated)
 } 
 
 // GET /v1/users/search?q=...&limit=20&offset=0
-func handleSearchUsers(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSearchUsers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -127,13 +127,13 @@ func handleSearchUsers(w http.ResponseWriter, r *http.Request) {
 	var users []models.User
 	var total int64
 	// Fingerprint substring match (case-insensitive)
-	if err := models.DB.Model(&models.User{}).
+	if err := s.DB.Model(&models.User{}).
 		Where("fingerprint ILIKE ?", "%"+q+"%").
 		Count(&total).Error; err != nil {
 		http.Error(w, "Failed to count users", http.StatusInternalServerError)
 		return
 	}
-	if err := models.DB.
+	if err := s.DB.
 		Where("fingerprint ILIKE ?", "%"+q+"%").
 		Order("fingerprint ASC").
 		Limit(limit).Offset(offset).
@@ -154,7 +154,7 @@ func handleSearchUsers(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/users/recent?limit=10
 // Derive distinct counterpart fingerprints from messages involving the current user.
-func handleRecentUsers(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleRecentUsers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -177,7 +177,7 @@ func handleRecentUsers(w http.ResponseWriter, r *http.Request) {
 	// Fetch messages where the user is sender or among recipients (JSONB array contains)
 	var messages []models.Message
 	arrayContains := fmt.Sprintf("[\"%s\"]", current)
-	if err := models.DB.
+	if err := s.DB.
 		Where("sender = ?", current).
 		Or("to_jsonb(recipients)::jsonb @> ?", arrayContains).
 		Order("created_at DESC").
@@ -228,7 +228,7 @@ func handleRecentUsers(w http.ResponseWriter, r *http.Request) {
 	for _, p := range pairs { fps = append(fps, p.fp) }
 	var users []models.User
 	if len(fps) > 0 {
-		if err := models.DB.Where("fingerprint IN ?", fps).Find(&users).Error; err != nil {
+		if err := s.DB.Where("fingerprint IN ?", fps).Find(&users).Error; err != nil {
 			http.Error(w, "Failed to fetch users", http.StatusInternalServerError)
 			return
 		}

@@ -175,7 +175,6 @@ func TestFullSyncConverges(t *testing.T) {
     nodeB := remote.API{Address: "nodeB"}
 
     // Round 1: A syncs with B
-    models.DB = dbA.Session(&gorm.Session{SkipHooks: true})
     missingForBFromA, err := SyncWithRequester(inMemoryRequester{DB: dbB}, nodeB, hashedA, nil)
     if err != nil { t.Fatalf("sync A->B: %v", err) }
     // Apply to B
@@ -186,7 +185,6 @@ func TestFullSyncConverges(t *testing.T) {
     }
 
     // Round 2: B syncs with A
-    models.DB = dbB.Session(&gorm.Session{SkipHooks: true})
     missingForAFromB, err := SyncWithRequester(inMemoryRequester{DB: dbA}, nodeA, hashedB, nil)
     if err != nil { t.Fatalf("sync B->A: %v", err) }
     // Apply to A
@@ -197,12 +195,9 @@ func TestFullSyncConverges(t *testing.T) {
     }
 
     // Optional extra round to ensure convergence if splits occurred
-    models.DB = dbA.Session(&gorm.Session{SkipHooks: true})
     hashedA2, _ := models.GenerateHashRanges(dbA, periods)
-    models.DB = dbB.Session(&gorm.Session{SkipHooks: true})
     hashedB2, _ := models.GenerateHashRanges(dbB, periods)
 
-    models.DB = dbA.Session(&gorm.Session{SkipHooks: true})
     moreForB, err := SyncWithRequester(inMemoryRequester{DB: dbB}, nodeB, hashedA2, nil)
     if err != nil { t.Fatalf("sync A->B (2): %v", err) }
     for _, m := range moreForB {
@@ -211,7 +206,6 @@ func TestFullSyncConverges(t *testing.T) {
         }
     }
 
-    models.DB = dbB.Session(&gorm.Session{SkipHooks: true})
     moreForA, err := SyncWithRequester(inMemoryRequester{DB: dbA}, nodeA, hashedB2, nil)
     if err != nil { t.Fatalf("sync B->A (2): %v", err) }
     for _, m := range moreForA {

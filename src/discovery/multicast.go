@@ -13,6 +13,8 @@ import (
 	"axial/models"
 	"axial/remote"
 	"axial/synchronization"
+
+	"gorm.io/gorm"
 )
 
 // New type to hold our connections
@@ -241,7 +243,7 @@ func setupMulticastConn(cfg config.Config, iface *net.Interface, addr *net.UDPAd
 	return conn, nil
 }
 
-func StartMulticastListener(cfg config.Config, conn *MulticastConnection) {
+func StartMulticastListener(cfg config.Config, conn *MulticastConnection, db *gorm.DB) {
 	fmt.Printf("Listening for messages on %v\n", conn.Conn.LocalAddr())
 	buffer := make([]byte, 4096)
 
@@ -283,7 +285,7 @@ func StartMulticastListener(cfg config.Config, conn *MulticastConnection) {
 						Address: fmt.Sprintf("%s%s", src.IP, port),
 					}
 					
-					err := synchronization.StartSync(remoteNode, hash)
+					err := synchronization.StartSync(db, remoteNode, hash)
 					if err != nil {
 						fmt.Printf("Failed to start sync: %v\n", err)
 					} else {
