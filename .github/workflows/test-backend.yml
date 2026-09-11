@@ -17,6 +17,7 @@ concurrency:
 jobs:
   backend-tests:
     name: Backend (Go) Tests
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -87,6 +88,7 @@ jobs:
 
   frontend-tests:
     name: Frontend (Vitest) Tests
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
